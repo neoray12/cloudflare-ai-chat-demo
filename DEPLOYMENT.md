@@ -1,5 +1,27 @@
 # 🚀 部署指南
 
+## 🎯 **一鍵部署（推薦）**
+
+使用智能部署腳本，自動檢測並配置所有服務：
+
+```bash
+# 智能部署（自動配置 API 端點）
+./auto-deploy.sh
+
+# 或使用標準部署
+./deploy-all.sh
+```
+
+這會自動：
+- ✅ 部署 Workers (API Router + Queue Consumer)  
+- ✅ 檢測 Worker URL 並更新前端配置
+- ✅ 建置和部署前端到 Cloudflare Pages
+- ✅ 測試 API 連接
+
+⚠️ **注意**: 部署前需要先設定 API Secrets（見下方說明）
+
+---
+
 ## 📋 前置需求
 
 1. Cloudflare 帳戶
@@ -123,8 +145,13 @@ wrangler dev --config wrangler-api.toml
 ### 常見問題
 
 1. **API 密鑰錯誤**: 確認在 Cloudflare Dashboard 中正確設定了 Secrets
-2. **CORS 錯誤**: 檢查 Workers 路由配置
-3. **資料庫連接失敗**: 確認 D1 資料庫 ID 正確
+2. **前端無法呼叫 API**: 
+   - 檢查 `frontend/env.config.js` 中的 `apiBaseUrl` 是否正確
+   - 確認 Worker 域名格式：`https://工作者名稱.您的帳號.workers.dev`
+   - 執行 `./auto-deploy.sh` 重新部署並自動配置
+3. **CORS 錯誤**: 檢查 Workers 路由配置
+4. **資料庫連接失敗**: 確認 D1 資料庫 ID 正確
+5. **Pages 部署失敗**: 確認專案名稱 `cloudflare-ai-chat-demo` 在您的帳戶中可用
 
 ### 支援
 

@@ -304,8 +304,8 @@
 <script setup>
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useTheme } from 'vuetify'
-import axios from 'axios'
 import MarkdownIt from 'vue3-markdown-it'
+import { chatAPI } from './utils/api.js'
 
 // 響應式狀態
 const theme = useTheme()
@@ -395,10 +395,7 @@ const sendMessage = async () => {
   scrollToBottom()
 
   try {
-    const response = await axios.post('/api/chat', {
-      message: question,
-      model: selectedModel.value
-    })
+    const response = await chatAPI.sendMessage(question, selectedModel.value)
 
     const aiMessage = {
       id: Date.now() + 1,
@@ -463,10 +460,7 @@ const regenerateMessage = async (message) => {
       showError.value = false
       
       try {
-        const response = await axios.post('/api/chat', {
-          message: userMessage.content,
-          model: selectedModel.value
-        })
+        const response = await chatAPI.sendMessage(userMessage.content, selectedModel.value)
 
         const aiMessage = {
           id: Date.now() + Math.random(),
