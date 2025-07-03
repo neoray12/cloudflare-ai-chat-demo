@@ -1,0 +1,21 @@
+{
+  "name": "cloudflare-ai-chat-demo",
+  "version": "1.0.0",
+  "description": "Cloudflare AI Chat Demo with Vue 3 and Workers",
+  "scripts": {
+    "dev": "npm run dev --workspace=frontend",
+    "dev:workers": "npm run dev --workspace=workers",
+    "build": "npm run build --workspace=frontend && npm run build --workspace=workers",
+    "deploy": "npm run deploy --workspace=workers"
+  },
+  "workspaces": [
+    "frontend",
+    "workers"
+  ],
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241106.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+} 

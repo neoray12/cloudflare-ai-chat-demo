@@ -1,0 +1,37 @@
+name = "ai-chat-api-router"
+main = "api-router/index.js"
+compatibility_date = "2024-01-01"
+
+# 帳戶設定
+account_id = "5efa272dc28e4e3933324c44165b6dbe"
+
+# 環境變數 - 請在 Cloudflare Dashboard 中設定這些變數
+[vars]
+ENVIRONMENT = "production"
+AI_GATEWAY_URL = "https://gateway.ai.cloudflare.com/v1/YOUR_ACCOUNT_ID/YOUR_GATEWAY_NAME"
+# OPENAI_API_KEY = "your-openai-api-key-here"  # 請在 Cloudflare Dashboard 中設定
+# PERPLEXITY_API_KEY = "your-perplexity-api-key-here"  # 請在 Cloudflare Dashboard 中設定
+
+# Workers AI 綁定
+[ai]
+binding = "AI"
+
+# D1 資料庫綁定
+[[d1_databases]]
+binding = "DB"
+database_name = "ai-chat-db"
+database_id = "c88825e0-1992-427e-8e9a-adbb30b9521e"
+
+# KV 命名空間綁定
+[[kv_namespaces]]
+binding = "CACHE"
+id = "698dd18f6a814bd180b63300e0ea5b38"
+
+# R2 儲存桶綁定
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "ai-chat-storage"
+
+# CORS 設定
+[env.production]
+routes = ["your-domain.com/api/*"] 

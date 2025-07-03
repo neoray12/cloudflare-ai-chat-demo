@@ -1,0 +1,29 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@headlessui/vue": "^1.7.16",
+    "@heroicons/vue": "^2.0.18",
+    "@mdi/font": "^7.4.47",
+    "@vueuse/core": "^13.5.0",
+    "axios": "^1.6.0",
+    "highlight.js": "^11.11.1",
+    "marked": "^16.0.0",
+    "vue": "^3.3.8",
+    "vue3-markdown-it": "^1.0.10",
+    "vuetify": "^3.8.12"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.5",
+    "vite": "^5.0.0"
+  }
+}
