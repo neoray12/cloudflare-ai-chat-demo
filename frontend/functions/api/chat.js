@@ -7,7 +7,7 @@ export async function onRequest(context) {
   }
 
   // 讀取 body 並直接轉發
-  const workerApiUrl = 'https://ai-chat-api-router.neo-cloudflare.workers.dev/chat'
+  const workerApiUrl = 'https://ai-chat-api-router.neo-cloudflare.workers.dev/api/chat'
 
   const headers = new Headers(request.headers)
   headers.set('Host', 'ai-chat-api-router.neo-cloudflare.workers.dev')

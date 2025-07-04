@@ -11,13 +11,27 @@ class AIGatewayClient {
 
   async callWorkerAI(message) {
     try {
-      // 使用內建 Worker AI 綁定（無需認證）
-      const response = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-        messages: [{ role: 'user', content: message }],
-        max_tokens: 1000
+      // 透過 Cloudflare AI Gateway 調用 Workers AI（正確路徑與 header）
+      const response = await fetch(`${this.gatewayUrl}/workers-ai/@cf/meta/llama-3.1-8b-instruct`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
+          'Authorization': `Bearer ${this.env.WORKER_AI_TOKEN}`
+        },
+        body: JSON.stringify({
+          prompt: message
+        })
       })
-      
-      return response.response
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        throw new Error(`Worker AI Gateway 錯誤: ${response.status} - ${errorData}`)
+      }
+
+      const data = await response.json()
+      // 根據 API 回傳格式調整
+      return data.result?.response || data.result || data.choices?.[0]?.message?.content || ''
     } catch (error) {
       console.error('Worker AI 調用失敗:', error)
       throw error
@@ -31,6 +45,7 @@ class AIGatewayClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
           'Authorization': `Bearer ${this.env.OPENAI_API_KEY}`
         },
         body: JSON.stringify({
@@ -55,23 +70,24 @@ class AIGatewayClient {
 
   async callPerplexity(message) {
     try {
-      // 直接調用 Perplexity API（AI Gateway 不支援）
-      const response = await fetch('https://api.perplexity.ai/chat/completions', {
+      // 透過 Cloudflare AI Gateway 調用 Perplexity API（正確路徑與 header）
+      const response = await fetch(`${this.gatewayUrl}/perplexity-ai/chat/completions`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'accept': 'application/json',
+          'content-type': 'application/json',
+          'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
           'Authorization': `Bearer ${this.env.PERPLEXITY_API_KEY}`
         },
         body: JSON.stringify({
-          model: 'llama-3.1-sonar-small-128k-online',
-          messages: [{ role: 'user', content: message }],
-          max_tokens: 1000
+          model: 'sonar',
+          messages: [{ role: 'user', content: message }]
         })
       })
 
       if (!response.ok) {
         const errorData = await response.text()
-        throw new Error(`Perplexity API 錯誤: ${response.status} - ${errorData}`)
+        throw new Error(`Perplexity Gateway 錯誤: ${response.status} - ${errorData}`)
       }
 
       const data = await response.json()
@@ -111,6 +127,138 @@ router.get('/api/health', () => {
   return new Response(JSON.stringify({ status: 'healthy' }), {
     headers: { 'Content-Type': 'application/json', ...corsHeaders }
   })
+})
+
+// 用戶登錄端點
+router.post('/api/auth/login', async (request, env) => {
+  try {
+    const { username, password, turnstileToken } = await request.json()
+    
+    if (!username || !password || !turnstileToken) {
+      return new Response(JSON.stringify({ error: '缺少必要參數' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      })
+    }
+
+    // 驗證 Turnstile
+    const turnstileResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        secret: env.TURNSTILE_SECRET_KEY,
+        response: turnstileToken
+      })
+    })
+
+    const turnstileResult = await turnstileResponse.json()
+    if (!turnstileResult.success) {
+      return new Response(JSON.stringify({ error: 'Turnstile 驗證失敗' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      })
+    }
+
+    // 簡單的密碼 hash（實際應用中應使用 bcrypt）
+    const encoder = new TextEncoder()
+    const data = encoder.encode(password)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const passwordHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+
+    // 從 D1 查詢用戶
+    const user = await env.DB.prepare(
+      'SELECT id, username, password_hash, email, is_active FROM users WHERE username = ? AND is_active = 1'
+    ).bind(username).first()
+
+    if (!user || user.password_hash !== passwordHash) {
+      // 記錄登錄失敗
+      await env.DB.prepare(
+        'INSERT INTO login_logs (user_id, ip_address, user_agent, success) VALUES (?, ?, ?, ?)'
+      ).bind(user?.id || null, request.headers.get('CF-Connecting-IP') || 'unknown', 
+             request.headers.get('User-Agent') || 'unknown', false).run()
+
+      return new Response(JSON.stringify({ error: '用戶名或密碼錯誤' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      })
+    }
+
+    // 記錄登錄成功
+    await env.DB.prepare(
+      'INSERT INTO login_logs (user_id, ip_address, user_agent, success) VALUES (?, ?, ?, ?)'
+    ).bind(user.id, request.headers.get('CF-Connecting-IP') || 'unknown', 
+           request.headers.get('User-Agent') || 'unknown', true).run()
+
+    // 生成簡單的 JWT token（實際應用中應使用更安全的方法）
+    const token = btoa(JSON.stringify({
+      userId: user.id,
+      username: user.username,
+      email: user.email,
+      exp: Date.now() + 24 * 60 * 60 * 1000 // 24小時過期
+    }))
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email
+      }
+    }), {
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    })
+
+  } catch (error) {
+    console.error('登錄錯誤:', error)
+    return new Response(JSON.stringify({ error: '登錄失敗', details: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    })
+  }
+})
+
+// 驗證 token 端點
+router.post('/api/auth/verify', async (request, env) => {
+  try {
+    const { token } = await request.json()
+    
+    if (!token) {
+      return new Response(JSON.stringify({ error: '缺少 token' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      })
+    }
+
+    const decoded = JSON.parse(atob(token))
+    if (decoded.exp < Date.now()) {
+      return new Response(JSON.stringify({ error: 'Token 已過期' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      })
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      user: {
+        id: decoded.userId,
+        username: decoded.username,
+        email: decoded.email
+      }
+    }), {
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    })
+
+  } catch (error) {
+    console.error('Token 驗證錯誤:', error)
+    return new Response(JSON.stringify({ error: 'Token 無效' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    })
+  }
 })
 
 // 聊天 API 端點
