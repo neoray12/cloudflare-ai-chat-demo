@@ -9,9 +9,9 @@ enabled = true
 # 帳戶設定
 account_id = "5efa272dc28e4e3933324c44165b6dbe"
 
-# 環境變數 - 請在 Cloudflare Dashboard 中設定這些變數
+# 預設環境變數（本地開發用）
 [vars]
-ENVIRONMENT = "production"
+ENVIRONMENT = "development"
 AI_GATEWAY_URL = "https://gateway.ai.cloudflare.com/v1/5efa272dc28e4e3933324c44165b6dbe/nkcf-gateway-01"
 
 # API 密鑰 - 請在 Cloudflare Dashboard Secrets 中設定
@@ -40,6 +40,51 @@ id = "698dd18f6a814bd180b63300e0ea5b38"
 binding = "STORAGE"
 bucket_name = "ai-chat-storage"
 
-# CORS 設定
+# 生產環境設定
 [env.production]
-routes = ["your-domain.com/api/*"] 
+vars = { ENVIRONMENT = "production", AI_GATEWAY_URL = "https://gateway.ai.cloudflare.com/v1/5efa272dc28e4e3933324c44165b6dbe/nkcf-gateway-01" }
+routes = ["your-domain.com/api/*"]
+
+# 生產環境 AI 綁定
+[env.production.ai]
+binding = "AI"
+
+# 生產環境 D1 資料庫綁定
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "ai-chat-db"
+database_id = "c88825e0-1992-427e-8e9a-adbb30b9521e"
+
+# 生產環境 KV 命名空間綁定
+[[env.production.kv_namespaces]]
+binding = "CACHE"
+id = "698dd18f6a814bd180b63300e0ea5b38"
+
+# 生產環境 R2 儲存桶綁定
+[[env.production.r2_buckets]]
+binding = "STORAGE"
+bucket_name = "ai-chat-storage"
+
+# 開發環境設定（本地開發用）
+[env.development]
+vars = { ENVIRONMENT = "development", AI_GATEWAY_URL = "https://gateway.ai.cloudflare.com/v1/5efa272dc28e4e3933324c44165b6dbe/nkcf-gateway-01" }
+
+# 開發環境 AI 綁定
+[env.development.ai]
+binding = "AI"
+
+# 開發環境 D1 資料庫綁定
+[[env.development.d1_databases]]
+binding = "DB"
+database_name = "ai-chat-db"
+database_id = "c88825e0-1992-427e-8e9a-adbb30b9521e"
+
+# 開發環境 KV 命名空間綁定
+[[env.development.kv_namespaces]]
+binding = "CACHE"
+id = "698dd18f6a814bd180b63300e0ea5b38"
+
+# 開發環境 R2 儲存桶綁定
+[[env.development.r2_buckets]]
+binding = "STORAGE"
+bucket_name = "ai-chat-storage" 

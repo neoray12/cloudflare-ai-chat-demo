@@ -21,6 +21,6 @@ CREATE TABLE IF NOT EXISTS login_logs (
 );
 
 -- 插入初始用戶（用戶名：neo，密碼：neo）
--- 使用 SHA-256 hash "neo" = "2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3"
+-- 使用 SHA-256 hash "neo" = "73ef176d9f12809e64363b2b5f4553abecca7aae157327f190323cfa0e42c815"
 INSERT OR REPLACE INTO users (username, password_hash, email) 
-VALUES ('neo', '2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3', 'neo@example.com'); 
+VALUES ('neo', '73ef176d9f12809e64363b2b5f4553abecca7aae157327f190323cfa0e42c815', 'neo@cloudflare.com'); 

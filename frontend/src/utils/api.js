@@ -13,11 +13,12 @@ const apiClient = axios.create({
 // 請求攔截器 - 調試用
 apiClient.interceptors.request.use(
   (config) => {
-    console.log('🚀 API Request:', {
+    console.log(`🚀 API Request (${apiConfig.environment}):`, {
       method: config.method?.toUpperCase(),
       url: config.url,
       baseURL: config.baseURL,
-      fullURL: `${config.baseURL}${config.url}`
+      fullURL: `${config.baseURL}${config.url}`,
+      environment: apiConfig.environment
     })
     return config
   },

@@ -40,6 +40,14 @@ class AIGatewayClient {
 
   async callOpenAI(message) {
     try {
+      // 檢查必要的 API 密鑰
+      if (!this.env.OPENAI_API_KEY) {
+        throw new Error('OpenAI API 密鑰未設定。請在 .dev.vars 檔案中設定 OPENAI_API_KEY')
+      }
+      if (!this.env.CLOUDFLARE_API_TOKEN) {
+        throw new Error('Cloudflare API Token 未設定。請在 .dev.vars 檔案中設定 CLOUDFLARE_API_TOKEN')
+      }
+
       // 透過 AI Gateway 調用 OpenAI API
       const response = await fetch(`${this.gatewayUrl}/openai/chat/completions`, {
         method: 'POST',
@@ -134,28 +142,37 @@ router.post('/api/auth/login', async (request, env) => {
   try {
     const { username, password, turnstileToken } = await request.json()
     
-    if (!username || !password || !turnstileToken) {
+    if (!username || !password) {
       return new Response(JSON.stringify({ error: '缺少必要參數' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders }
       })
     }
 
-    // 驗證 Turnstile
-    const turnstileResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        secret: env.TURNSTILE_SECRET_KEY,
-        response: turnstileToken
+    // 根據環境檢查 Turnstile 驗證
+    const isProduction = env.ENVIRONMENT === 'production'
+    
+    if (isProduction && turnstileToken) {
+      const turnstileResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          secret: env.TURNSTILE_SECRET_KEY,
+          response: turnstileToken
+        })
       })
-    })
 
-    const turnstileResult = await turnstileResponse.json()
-    if (!turnstileResult.success) {
-      return new Response(JSON.stringify({ error: 'Turnstile 驗證失敗' }), {
+      const turnstileResult = await turnstileResponse.json()
+      if (!turnstileResult.success) {
+        return new Response(JSON.stringify({ error: 'Turnstile 驗證失敗' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        })
+      }
+    } else if (isProduction && !turnstileToken) {
+      return new Response(JSON.stringify({ error: '生產環境需要 Turnstile 驗證' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders }
       })

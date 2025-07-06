@@ -55,9 +55,17 @@
                 required
               />
 
-              <!-- Turnstile Widget -->
-              <div class="mb-6 text-center">
+              <!-- Turnstile Widget - 根據環境顯示 -->
+              <div v-if="apiConfig.isProduction" class="mb-6 text-center">
                 <div ref="turnstileWidget" class="turnstile-widget"></div>
+              </div>
+              
+              <!-- 開發環境提示 -->
+              <div v-if="apiConfig.isDevelopment" class="mb-6 text-center">
+                <v-alert type="info" variant="tonal" density="compact">
+                  <v-icon start icon="mdi-shield-off"></v-icon>
+                  開發環境：已跳過 Turnstile 驗證
+                </v-alert>
               </div>
 
               <!-- 錯誤訊息 -->
@@ -74,7 +82,7 @@
               <v-btn
                 type="submit"
                 :loading="isLoading"
-                :disabled="!turnstileToken"
+                :disabled="apiConfig.isProduction && !turnstileToken"
                 block
                 size="large"
                 color="primary"
@@ -84,9 +92,18 @@
               </v-btn>
             </v-form>
 
-            <!-- 測試提示 -->
+            <!-- 環境和測試提示 -->
             <div class="text-center text-caption text-medium-emphasis">
-              測試帳號：neo / 密碼：neo
+              <div class="mb-2">
+                <v-chip 
+                  :color="apiConfig.isDevelopment ? 'orange' : 'green'" 
+                  variant="outlined" 
+                  size="small"
+                >
+                  {{ apiConfig.environment.toUpperCase() }}
+                </v-chip>
+              </div>
+              <div>測試帳號：neo / 密碼：neo</div>
             </div>
           </v-card-text>
         </v-card>
@@ -97,6 +114,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import apiConfig from '../env.config.js'
 
 // 響應式狀態
 const username = ref('')
@@ -184,7 +202,8 @@ const handleLogin = async () => {
   const { valid } = await loginForm.value.validate()
   if (!valid) return
 
-  if (!turnstileToken.value) {
+  // 根據環境檢查 Turnstile 驗證
+  if (apiConfig.isProduction && !turnstileToken.value) {
     errorMessage.value = '請完成安全驗證'
     return
   }
@@ -192,7 +211,12 @@ const handleLogin = async () => {
   isLoading.value = true
 
   try {
-    const response = await fetch('/api/auth/login', {
+    // 根據環境選擇 API 端點
+    const apiUrl = `${apiConfig.apiBaseUrl}/auth/login`
+    
+    console.log(`🔗 Login API (${apiConfig.environment}):`, apiUrl)
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -200,7 +224,7 @@ const handleLogin = async () => {
       body: JSON.stringify({
         username: username.value,
         password: password.value,
-        turnstileToken: turnstileToken.value
+        ...(apiConfig.isProduction && { turnstileToken: turnstileToken.value })
       })
     })
 
@@ -219,8 +243,8 @@ const handleLogin = async () => {
     } else {
       errorMessage.value = data.error || '登錄失敗'
       
-      // 重置 Turnstile
-      if (window.turnstile && turnstileWidgetId) {
+      // 生產環境重置 Turnstile
+      if (apiConfig.isProduction && window.turnstile && turnstileWidgetId) {
         window.turnstile.reset(turnstileWidgetId)
         turnstileToken.value = ''
       }
@@ -235,12 +259,18 @@ const handleLogin = async () => {
 
 // 生命週期
 onMounted(() => {
-  initTurnstile()
+  // 只在生產環境初始化 Turnstile
+  if (apiConfig.isProduction) {
+    console.log('🔒 Production environment: Initializing Turnstile')
+    initTurnstile()
+  } else {
+    console.log('🔧 Development environment: Skipping Turnstile')
+  }
 })
 
 onUnmounted(() => {
-  // 清理 Turnstile
-  if (window.turnstile && turnstileWidgetId) {
+  // 只在生產環境清理 Turnstile
+  if (apiConfig.isProduction && window.turnstile && turnstileWidgetId) {
     window.turnstile.remove(turnstileWidgetId)
   }
 })
