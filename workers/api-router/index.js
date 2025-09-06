@@ -14,7 +14,7 @@ class AIGatewayClient {
     const modelMappings = {
       'workers-ai-gpt-oss-120b': '@cf/openai/gpt-oss-120b',
       'workers-ai-gpt-oss-20b': '@cf/openai/gpt-oss-20b', 
-      'workers-ai-deepseek-r1': '@cf/deepseek/deepseek-r1-distill-qwen-32b',
+      'workers-ai-deepseek-r1': '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
       'workers-ai-llama': '@cf/meta/llama-3.1-8b-instruct'
     }
     
