@@ -109,7 +109,7 @@
                               <img 
                                 :src="item.raw.iconImage" 
                                 :alt="item.raw.name"
-                                class="model-icon"
+                                class="model-icon model-icon-spacing"
                                 style="width: 24px; height: 24px; object-fit: contain;"
                               />
                             </template>
@@ -382,6 +382,10 @@
 .model-icon-small {
   border-radius: 2px;
   vertical-align: middle;
+}
+
+.model-icon-spacing {
+  margin-right: 12px !important;
 }
 </style>
 
