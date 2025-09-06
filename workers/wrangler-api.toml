@@ -43,7 +43,7 @@ bucket_name = "ai-chat-storage"
 # 生產環境設定
 [env.production]
 vars = { ENVIRONMENT = "production", AI_GATEWAY_URL = "https://gateway.ai.cloudflare.com/v1/5efa272dc28e4e3933324c44165b6dbe/nkcf-gateway-01" }
-routes = ["your-domain.com/api/*"]
+# routes = ["your-domain.com/api/*"]
 
 # 生產環境 AI 綁定
 [env.production.ai]

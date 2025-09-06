@@ -41,20 +41,16 @@ class AIGatewayClient {
   async callOpenAI(message) {
     try {
       // 檢查必要的 API 密鑰
-      if (!this.env.OPENAI_API_KEY) {
-        throw new Error('OpenAI API 密鑰未設定。請在 .dev.vars 檔案中設定 OPENAI_API_KEY')
-      }
       if (!this.env.CLOUDFLARE_API_TOKEN) {
         throw new Error('Cloudflare API Token 未設定。請在 .dev.vars 檔案中設定 CLOUDFLARE_API_TOKEN')
       }
 
-      // 透過 AI Gateway 調用 OpenAI API
+      // 透過 AI Gateway 調用 OpenAI API (使用 BYOK)
       const response = await fetch(`${this.gatewayUrl}/openai/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
-          'Authorization': `Bearer ${this.env.OPENAI_API_KEY}`
+          'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`
         },
         body: JSON.stringify({
           model: 'gpt-3.5-turbo',
@@ -78,14 +74,13 @@ class AIGatewayClient {
 
   async callPerplexity(message) {
     try {
-      // 透過 Cloudflare AI Gateway 調用 Perplexity API（正確路徑與 header）
+      // 透過 Cloudflare AI Gateway 調用 Perplexity API (使用 BYOK)
       const response = await fetch(`${this.gatewayUrl}/perplexity-ai/chat/completions`, {
         method: 'POST',
         headers: {
           'accept': 'application/json',
           'content-type': 'application/json',
-          'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
-          'Authorization': `Bearer ${this.env.PERPLEXITY_API_KEY}`
+          'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`
         },
         body: JSON.stringify({
           model: 'sonar',

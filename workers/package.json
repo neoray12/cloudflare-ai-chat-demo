@@ -1,0 +1,19 @@
+{
+  "name": "ai-chat-api-router",
+  "version": "1.0.0",
+  "description": "AI Chat API Router for Cloudflare Workers",
+  "main": "api-router/index.js",
+  "scripts": {
+    "deploy": "wrangler deploy --config=wrangler-api.toml",
+    "dev": "wrangler dev --config=wrangler-api.toml",
+    "tail": "wrangler tail --config=wrangler-api.toml"
+  },
+  "dependencies": {
+    "itty-router": "^5.0.17"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "author": "Neo",
+  "license": "MIT"
+}

@@ -103,7 +103,6 @@
                   {{ apiConfig.environment.toUpperCase() }}
                 </v-chip>
               </div>
-              <div>測試帳號：neo / 密碼：neo</div>
             </div>
           </v-card-text>
         </v-card>
