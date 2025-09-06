@@ -95,8 +95,14 @@ class AIGatewayClient {
           // 尋找 type: "message" 的輸出
           const messageOutput = output.find(item => item.type === 'message')
           if (messageOutput && messageOutput.content && messageOutput.content[0]) {
-            return messageOutput.content[0].text || ''
+            const extractedText = messageOutput.content[0].text || ''
+            console.log('✅ Successfully extracted text from Workers AI response:', extractedText.substring(0, 100) + '...')
+            return extractedText
+          } else {
+            console.error('❌ Could not find message content in Workers AI response')
           }
+        } else {
+          console.error('❌ Invalid or missing output array in Workers AI response')
         }
         // 後備解析邏輯
         return data.result?.response || data.result || data.output || ''
@@ -428,6 +434,7 @@ router.post('/api/chat', async (request, env) => {
     console.log('📋 Request body contains:', { message: !!message, model: !!model, user: !!user })
 
     const aiResponse = await aiClient.processMessage(message, model, metadata)
+    console.log('🎯 Final AI Response to be sent to frontend:', aiResponse ? aiResponse.substring(0, 100) + '...' : 'EMPTY')
 
     // 建立完整的聊天記錄
     const chatData = {
