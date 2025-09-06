@@ -22,6 +22,24 @@ class AIGatewayClient {
     return modelMappings[modelId] || '@cf/meta/llama-3.1-8b-instruct'
   }
 
+  // 將前端模型值轉換為用戶友好的模型名稱（用於 metadata）
+  getModelDisplayName(model) {
+    const displayNames = {
+      'workers-ai-gpt-oss-120b': 'gpt-oss-120b',
+      'workers-ai-gpt-oss-20b': 'gpt-oss-20b',
+      'workers-ai-deepseek-r1': 'deepseek-r1-distill-qwen-32b',
+      'workers-ai-llama': 'llama-3.1-8b',
+      'openai-gpt-3.5': 'gpt-3.5-turbo',
+      'perplexity-sonar': 'sonar-small-online',
+      // 向後相容舊的模型名稱
+      'worker-ai': 'llama-3.1-8b',
+      'gpt': 'gpt-3.5-turbo',
+      'perplexity': 'sonar-small-online'
+    }
+    
+    return displayNames[model] || model
+  }
+
   async callWorkerAI(message, modelId, metadata = {}) {
     try {
       // 準備 headers
@@ -391,6 +409,9 @@ router.post('/api/chat', async (request, env) => {
       })
     }
 
+    // 調用 AI 模型並傳遞 metadata
+    const aiClient = new AIGatewayClient(env)
+    
     // 建構 custom metadata
     const metadata = {}
     if (user) {
@@ -398,7 +419,7 @@ router.post('/api/chat', async (request, env) => {
       metadata.email = user.email
       metadata.userTier = user.userTier
     }
-    metadata.model = model
+    metadata.model = aiClient.getModelDisplayName(model)
 
     // Debug: 記錄 metadata
     console.log('📊 Custom Metadata:', JSON.stringify(metadata, null, 2))
@@ -406,8 +427,6 @@ router.post('/api/chat', async (request, env) => {
     console.log('🔍 Metadata keys count:', Object.keys(metadata).length)
     console.log('📋 Request body contains:', { message: !!message, model: !!model, user: !!user })
 
-    // 調用 AI 模型並傳遞 metadata
-    const aiClient = new AIGatewayClient(env)
     const aiResponse = await aiClient.processMessage(message, model, metadata)
 
     // 建立完整的聊天記錄
