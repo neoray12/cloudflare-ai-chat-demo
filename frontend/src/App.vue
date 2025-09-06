@@ -106,7 +106,12 @@
                         <template v-slot:item="{ props, item }">
                           <v-list-item v-bind="props" :title="item.raw.name">
                             <template v-slot:prepend>
-                              <v-icon :color="item.raw.color">{{ item.raw.icon }}</v-icon>
+                              <img 
+                                :src="item.raw.iconImage" 
+                                :alt="item.raw.name"
+                                class="model-icon"
+                                style="width: 24px; height: 24px; object-fit: contain;"
+                              />
                             </template>
                             <template v-slot:subtitle>
                               {{ item.raw.description }}
@@ -179,7 +184,12 @@
                             <v-card-text class="pa-4">
                               <div class="d-flex justify-space-between align-start mb-3">
                                 <v-chip size="small" color="ai-bubble" variant="flat" rounded="lg">
-                                  <v-icon start size="small">mdi-robot</v-icon>
+                                  <img 
+                                    :src="getModelIcon(selectedModel)" 
+                                    :alt="getModelName(selectedModel)"
+                                    class="model-icon-small mr-2"
+                                    style="width: 16px; height: 16px; object-fit: contain;"
+                                  />
                                   {{ getModelName(selectedModel) }}
                                 </v-chip>
                                 <div class="message-actions">
@@ -359,6 +369,20 @@
 .error-message::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+.model-icon {
+  border-radius: 4px;
+  transition: transform 0.2s ease;
+}
+
+.model-icon:hover {
+  transform: scale(1.1);
+}
+
+.model-icon-small {
+  border-radius: 2px;
+  vertical-align: middle;
+}
 </style>
 
 <script setup>
@@ -397,42 +421,42 @@ const modelOptions = ref([
     name: 'Workers AI (gpt-oss-120b)',
     value: 'workers-ai-gpt-oss-120b',
     description: 'OpenAI 開源 120B 參數模型 - 生產級高推理能力',
-    icon: 'mdi-cloud',
+    iconImage: '/workers-ai.svg',
     color: 'orange'
   },
   {
     name: 'Workers AI (gpt-oss-20b)',
     value: 'workers-ai-gpt-oss-20b',
     description: 'OpenAI 開源 20B 參數模型 - 低延遲專用',
-    icon: 'mdi-cloud',
+    iconImage: '/workers-ai.svg',
     color: 'orange'
   },
   {
     name: 'Workers AI (deepseek-r1-distill-qwen-32b)',
     value: 'workers-ai-deepseek-r1',
     description: 'DeepSeek 推理模型 - 強化推理和思考能力',
-    icon: 'mdi-cloud',
+    iconImage: '/workers-ai.svg',
     color: 'blue'
   },
   {
     name: 'Workers AI (llama-3.1-8b)',
     value: 'workers-ai-llama',
     description: 'Meta Llama 3.1 8B - 多語言對話模型',
-    icon: 'mdi-cloud',
+    iconImage: '/workers-ai.svg',
     color: 'orange'
   },
   {
     name: 'OpenAI (gpt-3.5)',
     value: 'openai-gpt-3.5',
     description: 'OpenAI GPT-3.5 Turbo - 強大的語言模型',
-    icon: 'mdi-brain',
+    iconImage: '/gpt.png',
     color: 'green'
   },
   {
     name: 'Perplexity (sonar)',
     value: 'perplexity-sonar',
     description: 'Perplexity AI - 即時搜尋增強',
-    icon: 'mdi-magnify',
+    iconImage: '/perplexity.png',
     color: 'purple'
   }
 ])
@@ -479,6 +503,11 @@ const toggleTheme = () => {
 const getModelName = (value) => {
   const model = modelOptions.value.find(m => m.value === value)
   return model ? model.name : value
+}
+
+const getModelIcon = (value) => {
+  const model = modelOptions.value.find(m => m.value === value)
+  return model ? model.iconImage : '/workers-ai.svg'
 }
 
 const sendMessage = async () => {
