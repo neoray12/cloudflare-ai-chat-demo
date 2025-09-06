@@ -562,8 +562,16 @@ const sendMessage = async () => {
       data: err.response?.data,
       dataType: typeof err.response?.data
     })
-    const errorDetails = await parseCloudflareError(err.response)
-    error.value = formatErrorMessage(errorDetails)
+    
+    // 檢查是否為 429 限流錯誤
+    if (err.response?.data?.details && err.response.data.details.includes('Error Code 429')) {
+      error.value = err.response.data.details
+    } else {
+      // 其他錯誤使用原有的 Cloudflare Firewall 錯誤處理
+      const errorDetails = await parseCloudflareError(err.response)
+      error.value = formatErrorMessage(errorDetails)
+    }
+    
     showError.value = true
   } finally {
     isLoading.value = false
@@ -764,8 +772,16 @@ const regenerateMessage = async (message) => {
     
   } catch (err) {
     console.error('重新生成錯誤:', err)
-    const errorDetails = await parseCloudflareError(err.response)
-    error.value = formatErrorMessage(errorDetails)
+    
+    // 檢查是否為 429 限流錯誤
+    if (err.response?.data?.details && err.response.data.details.includes('Error Code 429')) {
+      error.value = err.response.data.details
+    } else {
+      // 其他錯誤使用原有的 Cloudflare Firewall 錯誤處理
+      const errorDetails = await parseCloudflareError(err.response)
+      error.value = formatErrorMessage(errorDetails)
+    }
+    
     showError.value = true
   } finally {
     isLoading.value = false
