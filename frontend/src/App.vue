@@ -520,6 +520,13 @@ const sendMessage = async () => {
     
   } catch (err) {
     console.error('聊天錯誤:', err)
+    console.error('完整錯誤物件:', {
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+      headers: err.response?.headers,
+      data: err.response?.data,
+      dataType: typeof err.response?.data
+    })
     const errorDetails = await parseCloudflareError(err.response)
     error.value = formatErrorMessage(errorDetails)
     showError.value = true
@@ -562,9 +569,19 @@ const parseCloudflareError = async (errorResponse) => {
         htmlText = errorResponse.data
       } else if (errorResponse.data && typeof errorResponse.data === 'object') {
         htmlText = JSON.stringify(errorResponse.data)
+      } else if (errorResponse.responseText) {
+        htmlText = errorResponse.responseText
       }
       
-      console.log('403 錯誤響應內容:', htmlText)
+      console.log('403 錯誤響應內容 (前 500 字符):', htmlText.substring(0, 500))
+      console.log('響應內容總長度:', htmlText.length)
+      console.log('包含關鍵字檢查:', {
+        'Cloudflare Ray ID': htmlText.includes('Cloudflare Ray ID'),
+        'Ray ID': htmlText.includes('Ray ID'),
+        'security service': htmlText.includes('security service'),
+        'Sorry, you have been blocked': htmlText.includes('Sorry, you have been blocked'),
+        'Firewall for AI': htmlText.includes('Firewall for AI')
+      })
       
       // 檢查是否包含 Cloudflare 錯誤頁面標識
       if (htmlText.includes('Cloudflare Ray ID') || 
@@ -576,17 +593,34 @@ const parseCloudflareError = async (errorResponse) => {
         errorDetails.type = 'firewall'
         errorDetails.message = '您的請求被 Cloudflare Firewall for AI 安全防護攔截'
         
-        // 提取 Ray ID - 更寬鬆的匹配模式
-        const rayIdMatch = htmlText.match(/Ray ID[:\s]*([a-f0-9-]+)/i)
+        // 提取 Ray ID - 多種匹配模式
+        let rayIdMatch = htmlText.match(/Cloudflare Ray ID[:\s]*([a-f0-9]{16,})/i) ||
+                        htmlText.match(/Ray ID[:\s]*([a-f0-9]{16,})/i) ||
+                        htmlText.match(/ray[_\-\s]*id[:\s]*([a-f0-9]{16,})/i)
+        
         if (rayIdMatch) {
           errorDetails.rayId = rayIdMatch[1]
+          console.log('✅ 提取到 Ray ID:', rayIdMatch[1])
+        } else {
+          console.log('❌ 未能提取 Ray ID，嘗試其他模式...')
+          // 嘗試更寬鬆的匹配
+          rayIdMatch = htmlText.match(/([a-f0-9]{16,})/i)
+          if (rayIdMatch) {
+            errorDetails.rayId = rayIdMatch[1]
+            console.log('✅ 寬鬆匹配到 Ray ID:', rayIdMatch[1])
+          }
         }
         
-        // 提取 IP 地址 - 更寬鬆的匹配模式
-        const ipMatch = htmlText.match(/IP[:\s]*[^0-9]*([0-9.]+)/i) || 
-                       htmlText.match(/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/i)
+        // 提取 IP 地址 - 多種匹配模式
+        let ipMatch = htmlText.match(/Your IP[:\s]*[^0-9]*([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/i) ||
+                     htmlText.match(/IP[:\s]*[^0-9]*([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/i) ||
+                     htmlText.match(/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/i)
+        
         if (ipMatch) {
           errorDetails.userIP = ipMatch[1]
+          console.log('✅ 提取到 IP 地址:', ipMatch[1])
+        } else {
+          console.log('❌ 未能提取 IP 地址')
         }
       } else {
         // 即使沒有明確的 Cloudflare 標識，403 錯誤也可能是防火牆攔截
