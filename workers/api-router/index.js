@@ -38,20 +38,28 @@ class AIGatewayClient {
     }
   }
 
-  async callOpenAI(message) {
+  async callOpenAI(message, metadata = {}) {
     try {
       // 檢查必要的 API 密鑰
       if (!this.env.CLOUDFLARE_API_TOKEN) {
         throw new Error('Cloudflare API Token 未設定。請在 .dev.vars 檔案中設定 CLOUDFLARE_API_TOKEN')
       }
 
+      // 準備 headers
+      const headers = {
+        'Content-Type': 'application/json',
+        'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`
+      }
+
+      // 加入 custom metadata (最多 5 個)
+      if (Object.keys(metadata).length > 0) {
+        headers['cf-aig-metadata'] = JSON.stringify(metadata)
+      }
+
       // 透過 AI Gateway 調用 OpenAI API (使用 BYOK)
       const response = await fetch(`${this.gatewayUrl}/openai/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`
-        },
+        headers,
         body: JSON.stringify({
           model: 'gpt-3.5-turbo',
           messages: [{ role: 'user', content: message }],
@@ -72,16 +80,24 @@ class AIGatewayClient {
     }
   }
 
-  async callPerplexity(message) {
+  async callPerplexity(message, metadata = {}) {
     try {
+      // 準備 headers
+      const headers = {
+        'accept': 'application/json',
+        'content-type': 'application/json',
+        'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`
+      }
+
+      // 加入 custom metadata (最多 5 個)
+      if (Object.keys(metadata).length > 0) {
+        headers['cf-aig-metadata'] = JSON.stringify(metadata)
+      }
+
       // 透過 Cloudflare AI Gateway 調用 Perplexity API (使用 BYOK)
       const response = await fetch(`${this.gatewayUrl}/perplexity-ai/chat/completions`, {
         method: 'POST',
-        headers: {
-          'accept': 'application/json',
-          'content-type': 'application/json',
-          'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`
-        },
+        headers,
         body: JSON.stringify({
           model: 'sonar',
           messages: [{ role: 'user', content: message }]
@@ -101,14 +117,14 @@ class AIGatewayClient {
     }
   }
 
-  async processMessage(message, model) {
+  async processMessage(message, model, metadata = {}) {
     switch (model) {
       case 'worker-ai':
         return await this.callWorkerAI(message)
       case 'gpt':
-        return await this.callOpenAI(message)
+        return await this.callOpenAI(message, metadata)
       case 'perplexity':
-        return await this.callPerplexity(message)
+        return await this.callPerplexity(message, metadata)
       default:
         throw new Error(`不支援的模型: ${model}`)
     }
@@ -180,9 +196,9 @@ router.post('/api/auth/login', async (request, env) => {
     const hashArray = Array.from(new Uint8Array(hashBuffer))
     const passwordHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 
-    // 從 D1 查詢用戶
+    // 從 D1 查詢用戶（包含 user_tier）
     const user = await env.DB.prepare(
-      'SELECT id, username, password_hash, email, is_active FROM users WHERE username = ? AND is_active = 1'
+      'SELECT id, username, password_hash, email, user_tier, is_active FROM users WHERE username = ? AND is_active = 1'
     ).bind(username).first()
 
     if (!user || user.password_hash !== passwordHash) {
@@ -209,6 +225,7 @@ router.post('/api/auth/login', async (request, env) => {
       userId: user.id,
       username: user.username,
       email: user.email,
+      userTier: user.user_tier,
       exp: Date.now() + 24 * 60 * 60 * 1000 // 24小時過期
     }))
 
@@ -218,7 +235,8 @@ router.post('/api/auth/login', async (request, env) => {
       user: {
         id: user.id,
         username: user.username,
-        email: user.email
+        email: user.email,
+        userTier: user.user_tier
       }
     }), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -258,7 +276,8 @@ router.post('/api/auth/verify', async (request, env) => {
       user: {
         id: decoded.userId,
         username: decoded.username,
-        email: decoded.email
+        email: decoded.email,
+        userTier: decoded.userTier
       }
     }), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -276,7 +295,7 @@ router.post('/api/auth/verify', async (request, env) => {
 // 聊天 API 端點
 router.post('/api/chat', async (request, env) => {
   try {
-    const { message, model } = await request.json()
+    const { message, model, user } = await request.json()
     
     if (!message || !model) {
       return new Response(JSON.stringify({ error: '缺少必要參數' }), {
@@ -305,9 +324,18 @@ router.post('/api/chat', async (request, env) => {
       })
     }
 
-    // 直接調用 AI 模型
+    // 建構 custom metadata
+    const metadata = {}
+    if (user) {
+      metadata.username = user.username
+      metadata.email = user.email
+      metadata.userTier = user.userTier
+    }
+    metadata.model = model
+
+    // 調用 AI 模型並傳遞 metadata
     const aiClient = new AIGatewayClient(env)
-    const aiResponse = await aiClient.processMessage(message, model)
+    const aiResponse = await aiClient.processMessage(message, model, metadata)
 
     // 建立完整的聊天記錄
     const chatData = {

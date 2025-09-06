@@ -74,6 +74,16 @@
                       <v-icon start>mdi-account</v-icon>
                       歡迎, {{ currentUser?.username }}
                     </v-chip>
+                    <!-- 用戶等級顯示 -->
+                    <v-chip 
+                      :color="currentUser?.userTier === 'vip' ? 'amber' : 'grey'" 
+                      variant="flat" 
+                      size="x-small" 
+                      class="ml-2"
+                    >
+                      <v-icon start>{{ currentUser?.userTier === 'vip' ? 'mdi-crown' : 'mdi-account-outline' }}</v-icon>
+                      {{ currentUser?.userTier === 'vip' ? 'VIP' : 'Regular' }}
+                    </v-chip>
                   </div>
                 </v-card-text>
 
@@ -425,7 +435,7 @@ const sendMessage = async () => {
   scrollToBottom()
 
   try {
-    const response = await chatAPI.sendMessage(question, selectedModel.value)
+    const response = await chatAPI.sendMessage(question, selectedModel.value, currentUser.value)
 
     const aiMessage = {
       id: Date.now() + 1,
@@ -494,7 +504,7 @@ const regenerateMessage = async (message) => {
   showError.value = false
 
   try {
-    const response = await chatAPI.sendMessage(userMessage.content, selectedModel.value)
+    const response = await chatAPI.sendMessage(userMessage.content, selectedModel.value, currentUser.value)
 
     const newAiMessage = {
       id: Date.now(),
