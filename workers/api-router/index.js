@@ -40,13 +40,23 @@ class AIGatewayClient {
       const modelPath = this.getWorkerAIModelPath(modelId)
       console.log(`🤖 Using Workers AI model: ${modelPath}`)
 
+      // 根據模型類型決定請求格式
+      let requestBody
+      if (modelPath.includes('gpt-oss') || modelPath.includes('deepseek')) {
+        // 對於 text-generation 模型使用 input 格式
+        requestBody = { input: message }
+        console.log('📝 Using text-generation format (input) for:', modelPath)
+      } else {
+        // 對於 chat 模型使用 messages 格式
+        requestBody = { messages: [{ role: 'user', content: message }] }
+        console.log('💬 Using chat format (messages) for:', modelPath)
+      }
+
       // 透過 Cloudflare AI Gateway 調用 Workers AI
       const response = await fetch(`${this.gatewayUrl}/workers-ai/${modelPath}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: message }]
-        })
+        body: JSON.stringify(requestBody)
       })
 
       if (!response.ok) {
@@ -55,8 +65,16 @@ class AIGatewayClient {
       }
 
       const data = await response.json()
-      // 根據 API 回傳格式調整
-      return data.result?.response || data.result || data.choices?.[0]?.message?.content || ''
+      console.log('🔍 WorkerAI Response structure:', JSON.stringify(data, null, 2))
+      
+      // 根據模型類型和 API 回傳格式調整
+      if (modelPath.includes('gpt-oss') || modelPath.includes('deepseek')) {
+        // text-generation 模型的回應格式
+        return data.result?.response || data.result || data.output || ''
+      } else {
+        // chat 模型的回應格式
+        return data.result?.response || data.result || data.choices?.[0]?.message?.content || ''
+      }
     } catch (error) {
       console.error('Worker AI 調用失敗:', error)
       throw error
