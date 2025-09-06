@@ -282,24 +282,36 @@
     </div>
 
     <!-- 錯誤提示 -->
-    <v-snackbar
+    <!-- 錯誤對話框 - 支援詳細的 Firewall 錯誤資訊 -->
+    <v-dialog
       v-model="showError"
-      color="error"
-      timeout="5000"
-      location="top"
+      max-width="600"
+      persistent
     >
-      <v-icon class="mr-2">mdi-alert</v-icon>
-      {{ error }}
-      <template v-slot:actions>
-        <v-btn
-          color="white"
-          variant="text"
-          @click="showError = false"
-        >
-          關閉
-        </v-btn>
-      </template>
-    </v-snackbar>
+      <v-card>
+        <v-card-title class="d-flex align-center">
+          <v-icon color="error" class="mr-2">
+            {{ error.includes('Cloudflare Firewall') ? 'mdi-shield-alert' : 'mdi-alert' }}
+          </v-icon>
+          {{ error.includes('Cloudflare Firewall') ? '安全防護攔截' : '發生錯誤' }}
+        </v-card-title>
+        
+        <v-card-text>
+          <pre class="error-message">{{ error }}</pre>
+        </v-card-text>
+        
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn
+            color="primary"
+            variant="text"
+            @click="showError = false"
+          >
+            我知道了
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- 成功提示 -->
     <v-snackbar
@@ -313,6 +325,41 @@
     </v-snackbar>
   </v-app>
 </template>
+
+<style scoped>
+.error-message {
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background-color: rgba(255, 0, 0, 0.05);
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid #f44336;
+  margin: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.error-message::-webkit-scrollbar {
+  width: 6px;
+}
+
+.error-message::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.error-message::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.error-message::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+</style>
 
 <script setup>
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
@@ -451,7 +498,9 @@ const sendMessage = async () => {
     scrollToBottom()
     
   } catch (err) {
-    error.value = err.response?.data?.error || '發送訊息時發生錯誤'
+    console.error('聊天錯誤:', err)
+    const errorDetails = await parseCloudflareError(err.response)
+    error.value = formatErrorMessage(errorDetails)
     showError.value = true
   } finally {
     isLoading.value = false
@@ -463,6 +512,109 @@ const formatTime = (timestamp) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+// 解析 Cloudflare Firewall 錯誤
+const parseCloudflareError = async (errorResponse) => {
+  let errorDetails = {
+    type: 'general',
+    message: '發送訊息時發生錯誤',
+    statusCode: null,
+    rayId: null,
+    userIP: null,
+    isFirewallBlock: false
+  }
+
+  if (!errorResponse) return errorDetails
+
+  // 獲取狀態碼
+  errorDetails.statusCode = errorResponse.status
+
+  // 檢查是否為 Cloudflare Firewall 錯誤 (403)
+  if (errorResponse.status === 403) {
+    try {
+      // 嘗試獲取 HTML 響應內容
+      let htmlText = ''
+      
+      // 處理不同類型的響應數據
+      if (typeof errorResponse.data === 'string') {
+        htmlText = errorResponse.data
+      } else if (errorResponse.data && typeof errorResponse.data === 'object') {
+        htmlText = JSON.stringify(errorResponse.data)
+      }
+      
+      console.log('403 錯誤響應內容:', htmlText)
+      
+      // 檢查是否包含 Cloudflare 錯誤頁面標識
+      if (htmlText.includes('Cloudflare Ray ID') || 
+          htmlText.includes('security service') || 
+          htmlText.includes('Sorry, you have been blocked') ||
+          htmlText.includes('Firewall for AI')) {
+        
+        errorDetails.isFirewallBlock = true
+        errorDetails.type = 'firewall'
+        errorDetails.message = '您的請求被 Cloudflare Firewall for AI 安全防護攔截'
+        
+        // 提取 Ray ID - 更寬鬆的匹配模式
+        const rayIdMatch = htmlText.match(/Ray ID[:\s]*([a-f0-9-]+)/i)
+        if (rayIdMatch) {
+          errorDetails.rayId = rayIdMatch[1]
+        }
+        
+        // 提取 IP 地址 - 更寬鬆的匹配模式
+        const ipMatch = htmlText.match(/IP[:\s]*[^0-9]*([0-9.]+)/i) || 
+                       htmlText.match(/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/i)
+        if (ipMatch) {
+          errorDetails.userIP = ipMatch[1]
+        }
+      } else {
+        // 即使沒有明確的 Cloudflare 標識，403 錯誤也可能是防火牆攔截
+        errorDetails.isFirewallBlock = true
+        errorDetails.type = 'firewall'
+        errorDetails.message = '請求被安全防護系統攔截 (403 Forbidden)'
+      }
+    } catch (parseError) {
+      console.error('解析 Cloudflare 錯誤失敗:', parseError)
+      // 即使解析失敗，403 錯誤也很可能是防火牆攔截
+      errorDetails.isFirewallBlock = true
+      errorDetails.type = 'firewall'
+      errorDetails.message = '請求被安全防護系統攔截 (403 Forbidden)'
+    }
+  }
+
+  // 如果不是 Firewall 錯誤，嘗試獲取一般錯誤訊息
+  if (!errorDetails.isFirewallBlock) {
+    errorDetails.message = errorResponse.data?.error || errorDetails.message
+  }
+
+  return errorDetails
+}
+
+// 格式化錯誤訊息顯示
+const formatErrorMessage = (errorDetails) => {
+  if (!errorDetails.isFirewallBlock) {
+    return errorDetails.message
+  }
+
+  let message = `🛡️ ${errorDetails.message}\n\n`
+  message += `📋 詳細資訊：\n`
+  message += `• 錯誤代碼：${errorDetails.statusCode} Forbidden\n`
+  
+  if (errorDetails.rayId) {
+    message += `• Ray ID：${errorDetails.rayId}\n`
+  }
+  
+  if (errorDetails.userIP) {
+    message += `• 您的 IP：${errorDetails.userIP}\n`
+  }
+  
+  message += `• 原因：AI 安全防護系統偵測到可疑內容\n\n`
+  message += `💡 解決方法：\n`
+  message += `• 請修改您的訊息內容\n`
+  message += `• 避免使用敏感詞彙或特殊字符\n`
+  message += `• 如持續發生，請聯繫管理員`
+  
+  return message
 }
 
 const copyMessage = async (content) => {
@@ -520,7 +672,9 @@ const regenerateMessage = async (message) => {
     scrollToBottom()
     
   } catch (err) {
-    error.value = err.response?.data?.error || '重新生成訊息時發生錯誤'
+    console.error('重新生成錯誤:', err)
+    const errorDetails = await parseCloudflareError(err.response)
+    error.value = formatErrorMessage(errorDetails)
     showError.value = true
   } finally {
     isLoading.value = false

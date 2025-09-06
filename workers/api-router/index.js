@@ -9,16 +9,25 @@ class AIGatewayClient {
     this.gatewayUrl = env.AI_GATEWAY_URL
   }
 
-  async callWorkerAI(message) {
+  async callWorkerAI(message, metadata = {}) {
     try {
+      // 準備 headers
+      const headers = {
+        'Content-Type': 'application/json',
+        'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
+        'Authorization': `Bearer ${this.env.WORKER_AI_TOKEN}`
+      }
+
+      // 加入 custom metadata (最多 5 個)
+      if (Object.keys(metadata).length > 0) {
+        headers['cf-aig-metadata'] = JSON.stringify(metadata)
+        console.log('🔗 WorkerAI - Adding cf-aig-metadata header:', JSON.stringify(metadata))
+      }
+
       // 透過 Cloudflare AI Gateway 調用 Workers AI（正確路徑與 header）
       const response = await fetch(`${this.gatewayUrl}/workers-ai/@cf/meta/llama-3.1-8b-instruct`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
-          'Authorization': `Bearer ${this.env.WORKER_AI_TOKEN}`
-        },
+        headers,
         body: JSON.stringify({
           prompt: message
         })
@@ -54,6 +63,7 @@ class AIGatewayClient {
       // 加入 custom metadata (最多 5 個)
       if (Object.keys(metadata).length > 0) {
         headers['cf-aig-metadata'] = JSON.stringify(metadata)
+        console.log('🔗 OpenAI - Adding cf-aig-metadata header:', JSON.stringify(metadata))
       }
 
       // 透過 AI Gateway 調用 OpenAI API (使用 BYOK)
@@ -92,6 +102,7 @@ class AIGatewayClient {
       // 加入 custom metadata (最多 5 個)
       if (Object.keys(metadata).length > 0) {
         headers['cf-aig-metadata'] = JSON.stringify(metadata)
+        console.log('🔗 Perplexity - Adding cf-aig-metadata header:', JSON.stringify(metadata))
       }
 
       // 透過 Cloudflare AI Gateway 調用 Perplexity API (使用 BYOK)
@@ -120,7 +131,7 @@ class AIGatewayClient {
   async processMessage(message, model, metadata = {}) {
     switch (model) {
       case 'worker-ai':
-        return await this.callWorkerAI(message)
+        return await this.callWorkerAI(message, metadata)
       case 'gpt':
         return await this.callOpenAI(message, metadata)
       case 'perplexity':
@@ -332,6 +343,12 @@ router.post('/api/chat', async (request, env) => {
       metadata.userTier = user.userTier
     }
     metadata.model = model
+
+    // Debug: 記錄 metadata
+    console.log('📊 Custom Metadata:', JSON.stringify(metadata, null, 2))
+    console.log('👤 User data received:', user ? 'Yes' : 'No')
+    console.log('🔍 Metadata keys count:', Object.keys(metadata).length)
+    console.log('📋 Request body contains:', { message: !!message, model: !!model, user: !!user })
 
     // 調用 AI 模型並傳遞 metadata
     const aiClient = new AIGatewayClient(env)
