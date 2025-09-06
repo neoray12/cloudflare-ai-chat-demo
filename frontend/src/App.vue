@@ -566,6 +566,32 @@ const sendMessage = async () => {
     // 檢查是否為 429 限流錯誤
     if (err.response?.data?.details && err.response.data.details.includes('Error Code 429')) {
       error.value = err.response.data.details
+    } 
+    // 檢查是否為 DLP 政策錯誤 (424)
+    else if (err.response?.status === 424 && err.response?.data?.details && 
+             err.response.data.details.includes('DLP policy violations')) {
+      const rayId = err.response.headers['cf-ray'] || '未知'
+      const statusCode = err.response.status
+      const details = err.response.data.details
+      
+      // 解析 DLP 錯誤詳情
+      let dlpReason = '內容違反資料外洩防護政策'
+      try {
+        const errorMatch = details.match(/"message":"([^"]+)"/)
+        if (errorMatch) {
+          dlpReason = errorMatch[1]
+        }
+      } catch (e) {
+        console.log('解析 DLP 錯誤訊息失敗:', e)
+      }
+      
+      error.value = `AI Gateway DLP 規則觸發
+
+狀態碼: ${statusCode}
+Ray ID: ${rayId}
+原因: ${dlpReason}
+
+您的請求內容被 Cloudflare AI Gateway 的資料外洩防護 (DLP) 政策攔截。請檢查您的輸入內容是否符合安全規範。`
     } else {
       // 其他錯誤使用原有的 Cloudflare Firewall 錯誤處理
       const errorDetails = await parseCloudflareError(err.response)
@@ -776,6 +802,32 @@ const regenerateMessage = async (message) => {
     // 檢查是否為 429 限流錯誤
     if (err.response?.data?.details && err.response.data.details.includes('Error Code 429')) {
       error.value = err.response.data.details
+    } 
+    // 檢查是否為 DLP 政策錯誤 (424)
+    else if (err.response?.status === 424 && err.response?.data?.details && 
+             err.response.data.details.includes('DLP policy violations')) {
+      const rayId = err.response.headers['cf-ray'] || '未知'
+      const statusCode = err.response.status
+      const details = err.response.data.details
+      
+      // 解析 DLP 錯誤詳情
+      let dlpReason = '內容違反資料外洩防護政策'
+      try {
+        const errorMatch = details.match(/"message":"([^"]+)"/)
+        if (errorMatch) {
+          dlpReason = errorMatch[1]
+        }
+      } catch (e) {
+        console.log('解析 DLP 錯誤訊息失敗:', e)
+      }
+      
+      error.value = `AI Gateway DLP 規則觸發
+
+狀態碼: ${statusCode}
+Ray ID: ${rayId}
+原因: ${dlpReason}
+
+您的請求內容被 Cloudflare AI Gateway 的資料外洩防護 (DLP) 政策攔截。請檢查您的輸入內容是否符合安全規範。`
     } else {
       // 其他錯誤使用原有的 Cloudflare Firewall 錯誤處理
       const errorDetails = await parseCloudflareError(err.response)
