@@ -215,28 +215,59 @@ class AIGatewayClient {
     }
   }
 
+  // 使用 Dynamic Route 調用 AI 模型
+  async callDynamicRoute(message, metadata = {}) {
+    try {
+      // 準備 headers
+      const headers = {
+        'Content-Type': 'application/json',
+        'cf-aig-authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`
+      }
+
+      // 加入 custom metadata (最多 5 個)
+      if (Object.keys(metadata).length > 0) {
+        headers['cf-aig-metadata'] = JSON.stringify(metadata)
+        console.log('🔗 Dynamic Route - Adding cf-aig-metadata header:', JSON.stringify(metadata))
+      }
+
+      console.log('🎯 Using Dynamic Route: dynamic/user-tier')
+
+      // 透過 Cloudflare AI Gateway 調用 Dynamic Route
+      const response = await fetch(`${this.gatewayUrl}/compat/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: 'dynamic/user-tier',
+          messages: [{ role: 'user', content: message }]
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        
+        // 特別處理 429 限流錯誤
+        if (response.status === 429) {
+          throw new Error('Error Code 429，使用流量已超過，AI Gateway 限流規則觸發')
+        }
+        
+        throw new Error(`Dynamic Route Gateway 錯誤: ${response.status} - ${errorData}`)
+      }
+
+      const data = await response.json()
+      console.log('🔍 Dynamic Route Response structure:', JSON.stringify(data, null, 2))
+      
+      // 返回 OpenAI 兼容格式的回應
+      return data.choices?.[0]?.message?.content || ''
+    } catch (error) {
+      console.error('Dynamic Route 調用失敗:', error)
+      throw error
+    }
+  }
+
   async processMessage(message, model, metadata = {}) {
-    // 處理 Workers AI 模型
-    if (model.startsWith('workers-ai-')) {
-      return await this.callWorkerAI(message, model, metadata)
-    }
-    
-    // 處理其他模型
-    switch (model) {
-      case 'openai-gpt-3.5':
-        return await this.callOpenAI(message, metadata)
-      case 'perplexity-sonar':
-        return await this.callPerplexity(message, metadata)
-      // 向後相容舊的模型名稱
-      case 'worker-ai':
-        return await this.callWorkerAI(message, 'workers-ai-llama', metadata)
-      case 'gpt':
-        return await this.callOpenAI(message, metadata)
-      case 'perplexity':
-        return await this.callPerplexity(message, metadata)
-      default:
-        throw new Error(`不支援的模型: ${model}`)
-    }
+    // 使用 Dynamic Route 來處理所有請求
+    // Dynamic Route 會根據 userTier 和其他條件來決定使用哪個模型和限流規則
+    return await this.callDynamicRoute(message, metadata)
   }
 }
 

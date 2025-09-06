@@ -398,7 +398,7 @@ import Login from './components/Login.vue'
 
 // 響應式狀態
 const theme = useTheme()
-const selectedModel = ref('workers-ai-gpt-oss-120b')
+const selectedModel = ref('dynamic-route')
 const userInput = ref('')
 const messages = ref([])
 const isLoading = ref(false)
@@ -419,50 +419,14 @@ const onLogoError = () => {
   showFallbackIcon.value = true
 }
 
-// 模型選項
+// 模型選項 - 現在使用 Dynamic Route 自動選擇
 const modelOptions = ref([
   {
-    name: 'Workers AI (gpt-oss-120b)',
-    value: 'workers-ai-gpt-oss-120b',
-    description: 'OpenAI 開源 120B 參數模型 - 生產級高推理能力',
+    name: '智能路由 (根據用戶等級自動選擇)',
+    value: 'dynamic-route',
+    description: '系統會根據您的用戶等級自動選擇最適合的 AI 模型',
     iconImage: '/workers-ai.svg',
-    color: 'orange'
-  },
-  {
-    name: 'Workers AI (gpt-oss-20b)',
-    value: 'workers-ai-gpt-oss-20b',
-    description: 'OpenAI 開源 20B 參數模型 - 低延遲專用',
-    iconImage: '/workers-ai.svg',
-    color: 'orange'
-  },
-  // 暫時移除 DeepSeek 模型，直到確認正確的路徑
-  // {
-  //   name: 'Workers AI (deepseek-r1-distill-qwen-32b)',
-  //   value: 'workers-ai-deepseek-r1',
-  //   description: 'DeepSeek 推理模型 - 強化推理和思考能力',
-  //   iconImage: '/workers-ai.svg',
-  //   color: 'blue'
-  // },
-  {
-    name: 'Workers AI (llama-3.1-8b)',
-    value: 'workers-ai-llama',
-    description: 'Meta Llama 3.1 8B - 多語言對話模型',
-    iconImage: '/workers-ai.svg',
-    color: 'orange'
-  },
-  {
-    name: 'OpenAI (gpt-3.5)',
-    value: 'openai-gpt-3.5',
-    description: 'OpenAI GPT-3.5 Turbo - 強大的語言模型',
-    iconImage: '/gpt.png',
-    color: 'green'
-  },
-  {
-    name: 'Perplexity (sonar)',
-    value: 'perplexity-sonar',
-    description: 'Perplexity AI - 即時搜尋增強',
-    iconImage: '/perplexity.png',
-    color: 'purple'
+    color: 'blue'
   }
 ])
 
