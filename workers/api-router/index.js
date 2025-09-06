@@ -69,7 +69,17 @@ class AIGatewayClient {
       
       // 根據模型類型和 API 回傳格式調整
       if (modelPath.includes('gpt-oss') || modelPath.includes('deepseek')) {
-        // text-generation 模型的回應格式
+        // 新的 gpt-oss 和 deepseek 模型回應格式
+        // 結構: data.result.output[1].content[0].text (message 部分)
+        const output = data.result?.output
+        if (output && Array.isArray(output) && output.length > 1) {
+          // 尋找 type: "message" 的輸出
+          const messageOutput = output.find(item => item.type === 'message')
+          if (messageOutput && messageOutput.content && messageOutput.content[0]) {
+            return messageOutput.content[0].text || ''
+          }
+        }
+        // 後備解析邏輯
         return data.result?.response || data.result || data.output || ''
       } else {
         // chat 模型的回應格式
