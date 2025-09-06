@@ -80,6 +80,12 @@ class AIGatewayClient {
 
       if (!response.ok) {
         const errorData = await response.text()
+        
+        // 特別處理 429 限流錯誤
+        if (response.status === 429) {
+          throw new Error('Error Code 429，使用流量已超過，AI Gateway 限流規則觸發')
+        }
+        
         throw new Error(`Worker AI Gateway 錯誤: ${response.status} - ${errorData}`)
       }
 
@@ -148,6 +154,12 @@ class AIGatewayClient {
 
       if (!response.ok) {
         const errorData = await response.text()
+        
+        // 特別處理 429 限流錯誤
+        if (response.status === 429) {
+          throw new Error('Error Code 429，使用流量已超過，AI Gateway 限流規則觸發')
+        }
+        
         throw new Error(`OpenAI API 錯誤: ${response.status} - ${errorData}`)
       }
 
@@ -186,6 +198,12 @@ class AIGatewayClient {
 
       if (!response.ok) {
         const errorData = await response.text()
+        
+        // 特別處理 429 限流錯誤
+        if (response.status === 429) {
+          throw new Error('Error Code 429，使用流量已超過，AI Gateway 限流規則觸發')
+        }
+        
         throw new Error(`Perplexity Gateway 錯誤: ${response.status} - ${errorData}`)
       }
 
