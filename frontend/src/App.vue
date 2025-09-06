@@ -370,7 +370,7 @@ import Login from './components/Login.vue'
 
 // 響應式狀態
 const theme = useTheme()
-const selectedModel = ref('worker-ai')
+const selectedModel = ref('workers-ai-gpt-oss-120b')
 const userInput = ref('')
 const messages = ref([])
 const isLoading = ref(false)
@@ -394,22 +394,43 @@ const onLogoError = () => {
 // 模型選項
 const modelOptions = ref([
   {
-    name: 'Worker AI',
-    value: 'worker-ai',
-    description: 'Cloudflare Workers AI',
+    name: 'Workers AI (gpt-oss-120b)',
+    value: 'workers-ai-gpt-oss-120b',
+    description: 'OpenAI 開源 120B 參數模型 - 生產級高推理能力',
     icon: 'mdi-cloud',
     color: 'orange'
   },
   {
-    name: 'GPT-3.5 Turbo',
-    value: 'gpt',
-    description: 'OpenAI GPT-3.5 - 強大的語言模型',
+    name: 'Workers AI (gpt-oss-20b)',
+    value: 'workers-ai-gpt-oss-20b',
+    description: 'OpenAI 開源 20B 參數模型 - 低延遲專用',
+    icon: 'mdi-cloud',
+    color: 'orange'
+  },
+  {
+    name: 'Workers AI (deepseek-r1-distill-qwen-32b)',
+    value: 'workers-ai-deepseek-r1',
+    description: 'DeepSeek 推理模型 - 強化推理和思考能力',
+    icon: 'mdi-cloud',
+    color: 'blue'
+  },
+  {
+    name: 'Workers AI (llama-3.1-8b)',
+    value: 'workers-ai-llama',
+    description: 'Meta Llama 3.1 8B - 多語言對話模型',
+    icon: 'mdi-cloud',
+    color: 'orange'
+  },
+  {
+    name: 'OpenAI (gpt-3.5)',
+    value: 'openai-gpt-3.5',
+    description: 'OpenAI GPT-3.5 Turbo - 強大的語言模型',
     icon: 'mdi-brain',
     color: 'green'
   },
   {
-    name: 'Perplexity',
-    value: 'perplexity',
+    name: 'Perplexity (sonar)',
+    value: 'perplexity-sonar',
     description: 'Perplexity AI - 即時搜尋增強',
     icon: 'mdi-magnify',
     color: 'purple'

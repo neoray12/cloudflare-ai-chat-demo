@@ -9,7 +9,19 @@ class AIGatewayClient {
     this.gatewayUrl = env.AI_GATEWAY_URL
   }
 
-  async callWorkerAI(message, metadata = {}) {
+  // 根據模型 ID 獲取 Workers AI 模型路徑
+  getWorkerAIModelPath(modelId) {
+    const modelMappings = {
+      'workers-ai-gpt-oss-120b': '@cf/openai/gpt-oss-120b',
+      'workers-ai-gpt-oss-20b': '@cf/openai/gpt-oss-20b', 
+      'workers-ai-deepseek-r1': '@cf/deepseek/deepseek-r1-distill-qwen-32b',
+      'workers-ai-llama': '@cf/meta/llama-3.1-8b-instruct'
+    }
+    
+    return modelMappings[modelId] || '@cf/meta/llama-3.1-8b-instruct'
+  }
+
+  async callWorkerAI(message, modelId, metadata = {}) {
     try {
       // 準備 headers
       const headers = {
@@ -24,12 +36,16 @@ class AIGatewayClient {
         console.log('🔗 WorkerAI - Adding cf-aig-metadata header:', JSON.stringify(metadata))
       }
 
-      // 透過 Cloudflare AI Gateway 調用 Workers AI（正確路徑與 header）
-      const response = await fetch(`${this.gatewayUrl}/workers-ai/@cf/meta/llama-3.1-8b-instruct`, {
+      // 根據模型 ID 選擇正確的模型路徑
+      const modelPath = this.getWorkerAIModelPath(modelId)
+      console.log(`🤖 Using Workers AI model: ${modelPath}`)
+
+      // 透過 Cloudflare AI Gateway 調用 Workers AI
+      const response = await fetch(`${this.gatewayUrl}/workers-ai/${modelPath}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          prompt: message
+          messages: [{ role: 'user', content: message }]
         })
       })
 
@@ -129,9 +145,20 @@ class AIGatewayClient {
   }
 
   async processMessage(message, model, metadata = {}) {
+    // 處理 Workers AI 模型
+    if (model.startsWith('workers-ai-')) {
+      return await this.callWorkerAI(message, model, metadata)
+    }
+    
+    // 處理其他模型
     switch (model) {
+      case 'openai-gpt-3.5':
+        return await this.callOpenAI(message, metadata)
+      case 'perplexity-sonar':
+        return await this.callPerplexity(message, metadata)
+      // 向後相容舊的模型名稱
       case 'worker-ai':
-        return await this.callWorkerAI(message, metadata)
+        return await this.callWorkerAI(message, 'workers-ai-llama', metadata)
       case 'gpt':
         return await this.callOpenAI(message, metadata)
       case 'perplexity':
