@@ -435,13 +435,14 @@ const modelOptions = ref([
     iconImage: '/workers-ai.svg',
     color: 'orange'
   },
-  {
-    name: 'Workers AI (deepseek-r1-distill-qwen-32b)',
-    value: 'workers-ai-deepseek-r1',
-    description: 'DeepSeek 推理模型 - 強化推理和思考能力',
-    iconImage: '/workers-ai.svg',
-    color: 'blue'
-  },
+  // 暫時移除 DeepSeek 模型，直到確認正確的路徑
+  // {
+  //   name: 'Workers AI (deepseek-r1-distill-qwen-32b)',
+  //   value: 'workers-ai-deepseek-r1',
+  //   description: 'DeepSeek 推理模型 - 強化推理和思考能力',
+  //   iconImage: '/workers-ai.svg',
+  //   color: 'blue'
+  // },
   {
     name: 'Workers AI (llama-3.1-8b)',
     value: 'workers-ai-llama',
