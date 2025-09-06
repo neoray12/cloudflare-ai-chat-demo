@@ -185,12 +185,12 @@
                               <div class="d-flex justify-space-between align-start mb-3">
                                 <v-chip size="small" color="ai-bubble" variant="flat" rounded="lg">
                                   <img 
-                                    :src="getModelIcon(selectedModel)" 
-                                    :alt="getModelName(selectedModel)"
+                                    :src="getModelIcon(message.model || selectedModel)" 
+                                    :alt="getModelName(message.model || selectedModel)"
                                     class="model-icon-small mr-2"
                                     style="width: 16px; height: 16px; object-fit: contain;"
                                   />
-                                  {{ getModelName(selectedModel) }}
+                                  {{ getModelName(message.model || selectedModel) }}
                                 </v-chip>
                                 <div class="message-actions">
                                   <v-btn
@@ -538,7 +538,8 @@ const sendMessage = async () => {
       id: Date.now() + 1,
       role: 'assistant',
       content: response.data.result,
-      timestamp: new Date()
+      timestamp: new Date(),
+      model: selectedModel.value
     }
 
     messages.value.push(aiMessage)
@@ -746,7 +747,8 @@ const regenerateMessage = async (message) => {
       id: Date.now(),
       role: 'assistant',
       content: response.data.result,
-      timestamp: new Date()
+      timestamp: new Date(),
+      model: selectedModel.value
     }
 
     messages.value.splice(messageIndex, 0, newAiMessage)
