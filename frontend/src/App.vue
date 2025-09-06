@@ -567,8 +567,9 @@ const sendMessage = async () => {
     if (err.response?.data?.details && err.response.data.details.includes('Error Code 429')) {
       error.value = err.response.data.details
     } 
-    // 檢查是否為 DLP 政策錯誤 (424)
-    else if (err.response?.status === 424 && err.response?.data?.details && 
+    // 檢查是否為 DLP 政策錯誤 (500 或 424)
+    else if ((err.response?.status === 500 || err.response?.status === 424) && 
+             err.response?.data?.details && 
              err.response.data.details.includes('DLP policy violations')) {
       const rayId = err.response.headers['cf-ray'] || '未知'
       const statusCode = err.response.status
@@ -803,8 +804,9 @@ const regenerateMessage = async (message) => {
     if (err.response?.data?.details && err.response.data.details.includes('Error Code 429')) {
       error.value = err.response.data.details
     } 
-    // 檢查是否為 DLP 政策錯誤 (424)
-    else if (err.response?.status === 424 && err.response?.data?.details && 
+    // 檢查是否為 DLP 政策錯誤 (500 或 424)
+    else if ((err.response?.status === 500 || err.response?.status === 424) && 
+             err.response?.data?.details && 
              err.response.data.details.includes('DLP policy violations')) {
       const rayId = err.response.headers['cf-ray'] || '未知'
       const statusCode = err.response.status
