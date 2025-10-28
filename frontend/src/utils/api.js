@@ -54,7 +54,16 @@ apiClient.interceptors.response.use(
 export const chatAPI = {
   // 發送聊天訊息
   sendMessage: (message, model, user = null) => {
-    return apiClient.post('/chat', { message, model, user })
+    return apiClient.post('/chat', { 
+      model, 
+      messages: [
+        {
+          role: 'user',
+          content: message
+        }
+      ],
+      user 
+    })
   },
   
   // 健康檢查

@@ -404,7 +404,9 @@ router.post('/api/auth/verify', async (request, env) => {
 // 聊天 API 端點
 router.post('/api/chat', async (request, env) => {
   try {
-    const { message, model, user } = await request.json()
+    const body = await request.json()
+    const message = body.message ?? body.prompt ?? (Array.isArray(body.messages) && body.messages[0]?.content) ?? null
+    const { model, user } = body
     
     if (!message || !model) {
       return new Response(JSON.stringify({ error: '缺少必要參數' }), {

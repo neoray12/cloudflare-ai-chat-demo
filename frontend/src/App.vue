@@ -593,6 +593,31 @@ Ray ID: ${rayId}
 原因: ${dlpReason}
 
 您的請求內容被 Cloudflare AI Gateway 的資料外洩防護 (DLP) 政策攔截。請檢查您的輸入內容是否符合安全規範。`
+    } 
+    // 檢查是否為 AI Gateway 一般性攔截（如 Prompt 被安全設定攔截）
+    else if ((err.response?.status === 424 || err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 451) &&
+             err.response?.data?.details) {
+      const details = err.response.data.details
+      // 嘗試從 details 內的 JSON 字串解析出 error 陣列的 code 與 message
+      let gatewayCode = '未知'
+      let gatewayMessage = '請求被 AI Gateway 攔截'
+      try {
+        const jsonStart = details.indexOf('{')
+        const jsonEnd = details.lastIndexOf('}')
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          const jsonStr = details.slice(jsonStart, jsonEnd + 1)
+          const parsed = JSON.parse(jsonStr)
+          if (Array.isArray(parsed.error) && parsed.error.length > 0) {
+            gatewayCode = parsed.error[0].code ?? gatewayCode
+            gatewayMessage = parsed.error[0].message ?? gatewayMessage
+          }
+        }
+      } catch (e) {
+        console.log('解析 AI Gateway 錯誤詳情失敗，回退為原文:', e)
+        // 回退：若無法解析，就顯示 details 原文
+        gatewayMessage = details
+      }
+      error.value = `你的問題已被 AI Gateway 擋下\n\n代碼: ${gatewayCode}\n訊息: ${gatewayMessage}`
     } else {
       // 其他錯誤使用原有的 Cloudflare Firewall 錯誤處理
       const errorDetails = await parseCloudflareError(err.response)
@@ -830,6 +855,29 @@ Ray ID: ${rayId}
 原因: ${dlpReason}
 
 您的請求內容被 Cloudflare AI Gateway 的資料外洩防護 (DLP) 政策攔截。請檢查您的輸入內容是否符合安全規範。`
+    } 
+    // 檢查是否為 AI Gateway 一般性攔截（如 Prompt 被安全設定攔截）
+    else if ((err.response?.status === 424 || err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 451) &&
+             err.response?.data?.details) {
+      const details = err.response.data.details
+      let gatewayCode = '未知'
+      let gatewayMessage = '請求被 AI Gateway 攔截'
+      try {
+        const jsonStart = details.indexOf('{')
+        const jsonEnd = details.lastIndexOf('}')
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          const jsonStr = details.slice(jsonStart, jsonEnd + 1)
+          const parsed = JSON.parse(jsonStr)
+          if (Array.isArray(parsed.error) && parsed.error.length > 0) {
+            gatewayCode = parsed.error[0].code ?? gatewayCode
+            gatewayMessage = parsed.error[0].message ?? gatewayMessage
+          }
+        }
+      } catch (e) {
+        console.log('解析 AI Gateway 錯誤詳情失敗，回退為原文:', e)
+        gatewayMessage = details
+      }
+      error.value = `你的問題已被 AI Gateway 擋下\n\n代碼: ${gatewayCode}\n訊息: ${gatewayMessage}`
     } else {
       // 其他錯誤使用原有的 Cloudflare Firewall 錯誤處理
       const errorDetails = await parseCloudflareError(err.response)
