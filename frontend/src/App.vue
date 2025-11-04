@@ -458,6 +458,13 @@ const modelOptions = ref([
     color: 'green'
   },
   {
+    name: 'OpenAI (gpt-5)',
+    value: 'openai-gpt-5',
+    description: 'OpenAI GPT-5 - 最新一代語言模型',
+    iconImage: '/gpt.png',
+    color: 'green'
+  },
+  {
     name: 'Perplexity (sonar)',
     value: 'perplexity-sonar',
     description: 'Perplexity AI - 即時搜尋增強',
@@ -537,21 +544,57 @@ const sendMessage = async () => {
   scrollToBottom()
 
   try {
-    const response = await chatAPI.sendMessage(question, selectedModel.value, currentUser.value)
-
-    const aiMessage = {
-      id: Date.now() + 1,
-      role: 'assistant',
-      content: response.data.result,
-      timestamp: new Date(),
-      model: selectedModel.value
-    }
-
-    messages.value.push(aiMessage)
+    // 檢查是否為 OpenAI 模型（需要 streaming）
+    const isOpenAIModel = selectedModel.value === 'openai-gpt-3.5' || selectedModel.value === 'openai-gpt-5' || selectedModel.value === 'gpt'
     
-    // 滾動到底部
-    await nextTick()
-    scrollToBottom()
+    if (isOpenAIModel) {
+      // 使用流式響應
+      let aiMessageId = Date.now() + 1
+      const aiMessage = {
+        id: aiMessageId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        model: selectedModel.value
+      }
+      
+      messages.value.push(aiMessage)
+      
+      // 流式響應處理
+      const response = await chatAPI.sendMessage(
+        question,
+        selectedModel.value,
+        currentUser.value,
+        (chunk, fullContent) => {
+          // 更新 AI 消息內容
+          const messageIndex = messages.value.findIndex(m => m.id === aiMessageId)
+          if (messageIndex !== -1) {
+            messages.value[messageIndex].content = fullContent
+            // 滾動到底部
+            nextTick(() => {
+              scrollToBottom()
+            })
+          }
+        }
+      )
+    } else {
+      // 非流式響應（原有邏輯）
+      const response = await chatAPI.sendMessage(question, selectedModel.value, currentUser.value)
+
+      const aiMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: response.data.result,
+        timestamp: new Date(),
+        model: selectedModel.value
+      }
+
+      messages.value.push(aiMessage)
+      
+      // 滾動到底部
+      await nextTick()
+      scrollToBottom()
+    }
     
   } catch (err) {
     console.error('聊天錯誤:', err)
@@ -595,8 +638,9 @@ Ray ID: ${rayId}
 您的請求內容被 Cloudflare AI Gateway 的資料外洩防護 (DLP) 政策攔截。請檢查您的輸入內容是否符合安全規範。`
     } 
     // 檢查是否為 AI Gateway 一般性攔截（如 Prompt 被安全設定攔截）
-    else if ((err.response?.status === 424 || err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 451) &&
-             err.response?.data?.details) {
+    else if ((err.response?.status === 424 || err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 451 || err.response?.status === 500) &&
+             err.response?.data?.details && 
+             err.response.data.details.includes('AI Gateway')) {
       const details = err.response.data.details
       // 嘗試從 details 內的 JSON 字串解析出 error 陣列的 code 與 message
       let gatewayCode = '未知'
@@ -857,8 +901,9 @@ Ray ID: ${rayId}
 您的請求內容被 Cloudflare AI Gateway 的資料外洩防護 (DLP) 政策攔截。請檢查您的輸入內容是否符合安全規範。`
     } 
     // 檢查是否為 AI Gateway 一般性攔截（如 Prompt 被安全設定攔截）
-    else if ((err.response?.status === 424 || err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 451) &&
-             err.response?.data?.details) {
+    else if ((err.response?.status === 424 || err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 451 || err.response?.status === 500) &&
+             err.response?.data?.details && 
+             err.response.data.details.includes('AI Gateway')) {
       const details = err.response.data.details
       let gatewayCode = '未知'
       let gatewayMessage = '請求被 AI Gateway 攔截'

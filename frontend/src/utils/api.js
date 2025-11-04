@@ -52,18 +52,87 @@ apiClient.interceptors.response.use(
 
 // API 方法
 export const chatAPI = {
-  // 發送聊天訊息
-  sendMessage: (message, model, user = null) => {
-    return apiClient.post('/chat', { 
-      model, 
-      messages: [
-        {
-          role: 'user',
-          content: message
+  // 發送聊天訊息（支持流式響應）
+  sendMessage: async (message, model, user = null, onStream = null) => {
+    // 檢查是否為 OpenAI 模型（需要 streaming）
+    const isOpenAIModel = model === 'openai-gpt-3.5' || model === 'openai-gpt-5' || model === 'gpt'
+    
+    if (isOpenAIModel) {
+      // 使用流式響應
+      const response = await fetch(`${apiConfig.apiBaseUrl}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          message,
+          user
+        })
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch (e) {
+          errorData = { error: errorText }
         }
-      ],
-      user 
-    })
+        throw { response: { status: response.status, data: errorData } }
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) {
+          return { data: { result: fullContent } }
+        }
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6)
+            if (data === '[DONE]') {
+              continue
+            }
+
+            try {
+              const json = JSON.parse(data)
+              const content = json.content || ''
+              if (content) {
+                fullContent += content
+                if (onStream) {
+                  onStream(content, fullContent)
+                }
+              }
+            } catch (e) {
+              console.error('解析 SSE 數據失敗:', e)
+            }
+          }
+        }
+      }
+    } else {
+      // 非流式響應（原有邏輯）
+      return apiClient.post('/chat', { 
+        model, 
+        messages: [
+          {
+            role: 'user',
+            content: message
+          }
+        ],
+        user 
+      })
+    }
   },
   
   // 健康檢查

@@ -30,6 +30,7 @@ class AIGatewayClient {
       'workers-ai-deepseek-r1': 'deepseek-r1-distill-qwen-32b',
       'workers-ai-llama': 'llama-3.1-8b',
       'openai-gpt-3.5': 'gpt-3.5-turbo',
+      'openai-gpt-5': 'gpt-5',
       'perplexity-sonar': 'sonar-small-online',
       // 向後相容舊的模型名稱
       'worker-ai': 'llama-3.1-8b',
@@ -38,6 +39,17 @@ class AIGatewayClient {
     }
     
     return displayNames[model] || model
+  }
+
+  // 獲取 OpenAI 模型名稱
+  getOpenAIModelName(model) {
+    const modelMappings = {
+      'openai-gpt-3.5': 'gpt-3.5-turbo',
+      'openai-gpt-5': 'gpt-5',
+      // 向後相容
+      'gpt': 'gpt-3.5-turbo'
+    }
+    return modelMappings[model] || 'gpt-3.5-turbo'
   }
 
   async callWorkerAI(message, modelId, metadata = {}) {
@@ -122,7 +134,7 @@ class AIGatewayClient {
     }
   }
 
-  async callOpenAI(message, metadata = {}) {
+  async callOpenAI(message, model = 'gpt-3.5-turbo', metadata = {}, stream = true) {
     try {
       // 檢查必要的 API 密鑰
       if (!this.env.CLOUDFLARE_API_TOKEN) {
@@ -146,9 +158,10 @@ class AIGatewayClient {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
+          model: model,
           messages: [{ role: 'user', content: message }],
-          max_tokens: 1000
+          max_tokens: 1000,
+          stream: stream
         })
       })
 
@@ -163,6 +176,12 @@ class AIGatewayClient {
         throw new Error(`OpenAI API 錯誤: ${response.status} - ${errorData}`)
       }
 
+      // 如果是 streaming mode，返回 response 对象供上层处理
+      if (stream) {
+        return response
+      }
+
+      // 非 streaming mode 的原有逻辑
       const data = await response.json()
       return data.choices[0].message.content
     } catch (error) {
@@ -215,7 +234,7 @@ class AIGatewayClient {
     }
   }
 
-  async processMessage(message, model, metadata = {}) {
+  async processMessage(message, model, metadata = {}, stream = false) {
     // 處理 Workers AI 模型
     if (model.startsWith('workers-ai-')) {
       return await this.callWorkerAI(message, model, metadata)
@@ -224,14 +243,16 @@ class AIGatewayClient {
     // 處理其他模型
     switch (model) {
       case 'openai-gpt-3.5':
-        return await this.callOpenAI(message, metadata)
+      case 'openai-gpt-5':
+        const openaiModel = this.getOpenAIModelName(model)
+        return await this.callOpenAI(message, openaiModel, metadata, stream)
       case 'perplexity-sonar':
         return await this.callPerplexity(message, metadata)
       // 向後相容舊的模型名稱
       case 'worker-ai':
         return await this.callWorkerAI(message, 'workers-ai-llama', metadata)
       case 'gpt':
-        return await this.callOpenAI(message, metadata)
+        return await this.callOpenAI(message, 'gpt-3.5-turbo', metadata, stream)
       case 'perplexity':
         return await this.callPerplexity(message, metadata)
       default:
@@ -419,22 +440,17 @@ router.post('/api/chat', async (request, env) => {
     const chatId = crypto.randomUUID()
     const timestamp = new Date().toISOString()
 
-    // 檢查 KV 快取
+    // 檢查 KV 快取（非 streaming 模式才使用快取）
     const encoder = new TextEncoder()
     const data = encoder.encode(message)
     const hashBuffer = await crypto.subtle.digest('SHA-256', data)
     const hashArray = Array.from(new Uint8Array(hashBuffer))
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
     const cacheKey = `chat:${model}:${hashHex.slice(0, 32)}`
-    const cached = await env.CACHE.get(cacheKey)
     
-    if (cached) {
-      console.log('從快取返回結果')
-      return new Response(cached, {
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      })
-    }
-
+    // 檢查是否為 OpenAI 模型（需要 streaming）
+    const isOpenAIModel = model === 'openai-gpt-3.5' || model === 'openai-gpt-5' || model === 'gpt'
+    
     // 調用 AI 模型並傳遞 metadata
     const aiClient = new AIGatewayClient(env)
     
@@ -453,7 +469,123 @@ router.post('/api/chat', async (request, env) => {
     console.log('🔍 Metadata keys count:', Object.keys(metadata).length)
     console.log('📋 Request body contains:', { message: !!message, model: !!model, user: !!user })
 
-    const aiResponse = await aiClient.processMessage(message, model, metadata)
+    // 如果是 OpenAI 模型，使用 streaming mode
+    if (isOpenAIModel) {
+      const streamResponse = await aiClient.processMessage(message, model, metadata, true)
+      
+      if (!streamResponse || !streamResponse.body) {
+        throw new Error('無法獲取流式響應')
+      }
+
+      // 創建一個新的 ReadableStream 來處理 OpenAI 的流式響應
+      const stream = new ReadableStream({
+        async start(controller) {
+          const reader = streamResponse.body.getReader()
+          const decoder = new TextDecoder()
+          const encoder = new TextEncoder()
+          let buffer = ''
+          let fullContent = ''
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read()
+              
+              if (done) {
+                // 儲存完整對話記錄
+                try {
+                  const chatData = {
+                    id: chatId,
+                    userId: 'anonymous',
+                    model,
+                    timestamp,
+                    messages: [
+                      {
+                        role: 'user',
+                        content: message,
+                        timestamp
+                      },
+                      {
+                        role: 'assistant',
+                        content: fullContent,
+                        timestamp: new Date().toISOString()
+                      }
+                    ]
+                  }
+
+                  const r2Key = `chat-${chatId}.json`
+                  await env.STORAGE.put(r2Key, JSON.stringify(chatData, null, 2), {
+                    httpMetadata: {
+                      contentType: 'application/json',
+                    }
+                  })
+
+                  await env.DB.prepare(
+                    'INSERT INTO chats (id, user_id, created_at, r2_key, model) VALUES (?, ?, ?, ?, ?)'
+                  ).bind(chatId, 'anonymous', timestamp, r2Key, model).run()
+                } catch (storageError) {
+                  console.error('儲存失敗:', storageError)
+                }
+
+                // 發送結束標記
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+                controller.close()
+                break
+              }
+
+              // 處理流式數據
+              buffer += decoder.decode(value, { stream: true })
+              const lines = buffer.split('\n')
+              buffer = lines.pop() || ''
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6)
+                  if (data === '[DONE]') {
+                    continue
+                  }
+
+                  try {
+                    const json = JSON.parse(data)
+                    const content = json.choices?.[0]?.delta?.content || ''
+                    if (content) {
+                      fullContent += content
+                      // 發送 SSE 格式的數據
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`))
+                    }
+                  } catch (e) {
+                    console.error('解析 SSE 數據失敗:', e)
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error('流式處理錯誤:', error)
+            controller.error(error)
+          }
+        }
+      })
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          ...corsHeaders
+        }
+      })
+    }
+
+    // 非 OpenAI 模型或非 streaming 模式，使用原有邏輯
+    const cached = await env.CACHE.get(cacheKey)
+    
+    if (cached) {
+      console.log('從快取返回結果')
+      return new Response(cached, {
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      })
+    }
+
+    const aiResponse = await aiClient.processMessage(message, model, metadata, false)
     console.log('🎯 Final AI Response to be sent to frontend:', aiResponse ? aiResponse.substring(0, 100) + '...' : 'EMPTY')
 
     // 建立完整的聊天記錄
