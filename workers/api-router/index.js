@@ -278,7 +278,7 @@ class AIGatewayClient {
     }
   }
 
-  async processMessage(message, model, metadata = {}, stream = false) {
+  async processMessage(message, model, metadata = {}, stream = false, images = null) {
     // 處理 Workers AI 模型
     if (model.startsWith('workers-ai-')) {
       return await this.callWorkerAI(message, model, metadata)
@@ -289,14 +289,14 @@ class AIGatewayClient {
       case 'openai-gpt-3.5':
       case 'openai-gpt-5':
         const openaiModel = this.getOpenAIModelName(model)
-        return await this.callOpenAI(message, openaiModel, metadata, stream)
+        return await this.callOpenAI(message, openaiModel, metadata, stream, images)
       case 'perplexity-sonar':
         return await this.callPerplexity(message, metadata)
       // 向後相容舊的模型名稱
       case 'worker-ai':
         return await this.callWorkerAI(message, 'workers-ai-llama', metadata)
       case 'gpt':
-        return await this.callOpenAI(message, 'gpt-3.5-turbo', metadata, stream)
+        return await this.callOpenAI(message, 'gpt-3.5-turbo', metadata, stream, images)
       case 'perplexity':
         return await this.callPerplexity(message, metadata)
       default:
