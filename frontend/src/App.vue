@@ -233,7 +233,60 @@
                                   </v-btn>
                                 </div>
                               </div>
+                              <!-- 歡迎訊息特殊處理：顯示三個按鈕 -->
+                              <div v-if="message.id === 0" class="welcome-message">
+                                <div class="text-body-1 mb-4 text-center">
+                                  你好！我是 Cloudflare AI 助手 👋<br>
+                                  我可以協助您：
+                                </div>
+                                <v-row justify="center" class="mb-4">
+                                  <v-col cols="12" sm="4" class="d-flex justify-center">
+                                    <v-card
+                                      class="welcome-button-card"
+                                      elevation="2"
+                                      hover
+                                      @click="handleWelcomeButtonClick('回答各種問題')"
+                                    >
+                                      <v-card-text class="text-center pa-4">
+                                        <v-icon size="32" color="primary" class="mb-2">mdi-file-document-outline</v-icon>
+                                        <div class="text-body-2 font-weight-medium">回答各種問題</div>
+                                      </v-card-text>
+                                    </v-card>
+                                  </v-col>
+                                  <v-col cols="12" sm="4" class="d-flex justify-center">
+                                    <v-card
+                                      class="welcome-button-card"
+                                      elevation="2"
+                                      hover
+                                      @click="handleWelcomeButtonClick('協助程式設計')"
+                                    >
+                                      <v-card-text class="text-center pa-4">
+                                        <v-icon size="32" color="primary" class="mb-2">mdi-code-tags</v-icon>
+                                        <div class="text-body-2 font-weight-medium">協助程式設計</div>
+                                      </v-card-text>
+                                    </v-card>
+                                  </v-col>
+                                  <v-col cols="12" sm="4" class="d-flex justify-center">
+                                    <v-card
+                                      class="welcome-button-card"
+                                      elevation="2"
+                                      hover
+                                      @click="handleWelcomeButtonClick('提供資訊查詢')"
+                                    >
+                                      <v-card-text class="text-center pa-4">
+                                        <v-icon size="32" color="primary" class="mb-2">mdi-magnify</v-icon>
+                                        <div class="text-body-2 font-weight-medium">提供資訊查詢</div>
+                                      </v-card-text>
+                                    </v-card>
+                                  </v-col>
+                                </v-row>
+                                <div class="text-body-2 text-center text-medium-emphasis">
+                                  請選擇一個 AI 模型，然後開始對話吧！
+                                </div>
+                              </div>
+                              <!-- 一般訊息：使用 Markdown 渲染 -->
                               <MarkdownIt 
+                                v-else
                                 :source="message.content"
                                 class="markdown-content text-left"
                               />
@@ -1181,12 +1234,24 @@ const initWelcomeMessage = () => {
 - 📝 回答各種問題
 - 💻 協助程式設計
 - 🔍 提供資訊查詢 
-- 🎓 學習新知識
 
 請選擇一個 AI 模型，然後開始對話吧！`,
       timestamp: new Date()
     })
   }
+}
+
+// 處理歡迎訊息按鈕點擊
+const handleWelcomeButtonClick = (action) => {
+  // 將按鈕文字作為用戶輸入
+  userInput.value = `請${action}`
+  // 自動聚焦到輸入框
+  nextTick(() => {
+    const textarea = document.querySelector('textarea')
+    if (textarea) {
+      textarea.focus()
+    }
+  })
 }
 
 // 監聽登錄成功事件
@@ -1293,6 +1358,24 @@ onMounted(() => {
 :deep(.markdown-content th) {
   background-color: rgba(0, 0, 0, 0.05);
   font-weight: 600;
+}
+
+/* 歡迎訊息按鈕樣式 */
+.welcome-button-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 140px;
+  max-width: 200px;
+  width: 100%;
+}
+
+.welcome-button-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.welcome-message {
+  text-align: center;
 }
 </style>
 
