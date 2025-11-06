@@ -134,7 +134,7 @@ class AIGatewayClient {
     }
   }
 
-  async callOpenAI(message, model = 'gpt-3.5-turbo', metadata = {}, stream = true) {
+  async callOpenAI(message, model = 'gpt-3.5-turbo', metadata = {}, stream = true, images = null) {
     try {
       // 檢查必要的 API 密鑰
       if (!this.env.CLOUDFLARE_API_TOKEN) {
@@ -153,16 +153,60 @@ class AIGatewayClient {
         console.log('🔗 OpenAI - Adding cf-aig-metadata header:', JSON.stringify(metadata))
       }
 
+      // 構建消息內容
+      let messageContent = []
+      
+      // 如果有文本，添加文本內容
+      if (message && message.trim() !== '') {
+        messageContent.push({
+          type: 'text',
+          text: message
+        })
+      }
+      
+      // 如果有圖片，添加圖片內容
+      if (images && Array.isArray(images) && images.length > 0) {
+        for (const img of images) {
+          // 構建 base64 URL 格式：data:image/{mimeType};base64,{base64}
+          const imageUrl = `data:${img.mimeType};base64,${img.base64}`
+          messageContent.push({
+            type: 'image_url',
+            image_url: {
+              url: imageUrl
+            }
+          })
+        }
+      }
+      
+      // 如果沒有任何內容，使用默認文本
+      if (messageContent.length === 0) {
+        messageContent.push({
+          type: 'text',
+          text: '請分析這些圖片'
+        })
+      }
+
+      // 根據模型類型選擇正確的參數
+      // gpt-5 和其他新模型使用 max_completion_tokens，舊模型使用 max_tokens
+      const requestBody = {
+        model: model,
+        messages: [{ role: 'user', content: messageContent }],
+        stream: stream
+      }
+
+      // 對於 gpt-5 和新模型使用 max_completion_tokens
+      if (model === 'gpt-5' || model.startsWith('gpt-5')) {
+        requestBody.max_completion_tokens = 1000
+      } else {
+        // 對於舊模型使用 max_tokens（向後兼容）
+        requestBody.max_tokens = 1000
+      }
+
       // 透過 AI Gateway 調用 OpenAI API (使用 BYOK)
       const response = await fetch(`${this.gatewayUrl}/openai/chat/completions`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          model: model,
-          messages: [{ role: 'user', content: message }],
-          max_tokens: 1000,
-          stream: stream
-        })
+        body: JSON.stringify(requestBody)
       })
 
       if (!response.ok) {
@@ -427,13 +471,60 @@ router.post('/api/chat', async (request, env) => {
   try {
     const body = await request.json()
     const message = body.message ?? body.prompt ?? (Array.isArray(body.messages) && body.messages[0]?.content) ?? null
-    const { model, user } = body
+    const { model, user, images } = body
     
-    if (!message || !model) {
-      return new Response(JSON.stringify({ error: '缺少必要參數' }), {
+    // 檢查必要參數：至少需要 message 或 images 其中一個
+    if ((!message || message.trim() === '') && (!images || images.length === 0)) {
+      return new Response(JSON.stringify({ error: '缺少必要參數：需要訊息或圖片' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders }
       })
+    }
+    
+    if (!model) {
+      return new Response(JSON.stringify({ error: '缺少必要參數：模型' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      })
+    }
+    
+    // 驗證圖片數據（如果存在）
+    if (images && Array.isArray(images) && images.length > 0) {
+      // 檢查圖片數量限制
+      if (images.length > 10) {
+        return new Response(JSON.stringify({ error: '圖片數量超過限制（最多 10 張）' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        })
+      }
+      
+      // 驗證圖片格式和大小
+      for (const img of images) {
+        if (!img.base64 || !img.mimeType) {
+          return new Response(JSON.stringify({ error: '圖片數據格式錯誤：缺少 base64 或 mimeType' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          })
+        }
+        
+        // 驗證 mimeType
+        const validMimeTypes = ['image/jpeg', 'image/png', 'image/webp']
+        if (!validMimeTypes.includes(img.mimeType)) {
+          return new Response(JSON.stringify({ error: `不支持的圖片格式：${img.mimeType}` }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          })
+        }
+        
+        // 驗證 base64 大小（考慮 base64 編碼後增加約 33%）
+        const base64Size = (img.base64.length * 3) / 4
+        if (base64Size > 10 * 1024 * 1024) {
+          return new Response(JSON.stringify({ error: '圖片大小超過限制（每張最大 10MB）' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          })
+        }
+      }
     }
 
     // 生成聊天 ID
@@ -471,7 +562,7 @@ router.post('/api/chat', async (request, env) => {
 
     // 如果是 OpenAI 模型，使用 streaming mode
     if (isOpenAIModel) {
-      const streamResponse = await aiClient.processMessage(message, model, metadata, true)
+      const streamResponse = await aiClient.processMessage(message, model, metadata, true, images)
       
       if (!streamResponse || !streamResponse.body) {
         throw new Error('無法獲取流式響應')
@@ -502,6 +593,7 @@ router.post('/api/chat', async (request, env) => {
                       {
                         role: 'user',
                         content: message,
+                        images: images && images.length > 0 ? images.map(img => ({ mimeType: img.mimeType })) : undefined,
                         timestamp
                       },
                       {
@@ -585,7 +677,7 @@ router.post('/api/chat', async (request, env) => {
       })
     }
 
-    const aiResponse = await aiClient.processMessage(message, model, metadata, false)
+    const aiResponse = await aiClient.processMessage(message, model, metadata, false, images)
     console.log('🎯 Final AI Response to be sent to frontend:', aiResponse ? aiResponse.substring(0, 100) + '...' : 'EMPTY')
 
     // 建立完整的聊天記錄
@@ -598,6 +690,7 @@ router.post('/api/chat', async (request, env) => {
         {
           role: 'user',
           content: message,
+          images: images && images.length > 0 ? images.map(img => ({ mimeType: img.mimeType })) : undefined,
           timestamp
         },
         {

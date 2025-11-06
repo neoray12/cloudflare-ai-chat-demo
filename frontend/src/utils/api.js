@@ -52,10 +52,22 @@ apiClient.interceptors.response.use(
 
 // API 方法
 export const chatAPI = {
-  // 發送聊天訊息（支持流式響應）
-  sendMessage: async (message, model, user = null, onStream = null) => {
+  // 發送聊天訊息（支持流式響應和圖片）
+  sendMessage: async (message, model, user = null, onStream = null, images = null) => {
     // 檢查是否為 OpenAI 模型（需要 streaming）
     const isOpenAIModel = model === 'openai-gpt-3.5' || model === 'openai-gpt-5' || model === 'gpt'
+    
+    // 構建請求體
+    const requestBody = {
+      model,
+      message,
+      user
+    }
+    
+    // 如果有圖片，添加到請求體
+    if (images && images.length > 0) {
+      requestBody.images = images
+    }
     
     if (isOpenAIModel) {
       // 使用流式響應
@@ -64,11 +76,7 @@ export const chatAPI = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model,
-          message,
-          user
-        })
+        body: JSON.stringify(requestBody)
       })
 
       if (!response.ok) {
@@ -122,16 +130,23 @@ export const chatAPI = {
       }
     } else {
       // 非流式響應（原有邏輯）
-      return apiClient.post('/chat', { 
-        model, 
+      const requestBody = {
+        model,
         messages: [
           {
             role: 'user',
             content: message
           }
         ],
-        user 
-      })
+        user
+      }
+      
+      // 如果有圖片，添加到請求體
+      if (images && images.length > 0) {
+        requestBody.images = images
+      }
+      
+      return apiClient.post('/chat', requestBody)
     }
   },
   
