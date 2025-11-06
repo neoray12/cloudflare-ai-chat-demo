@@ -123,75 +123,6 @@
                   </v-row>
                 </v-card-text>
 
-                <!-- 圖片上傳區域（僅 GPT-5 時顯示） -->
-                <v-card-text v-if="showImageUpload" class="py-2 px-3 flex-shrink-0">
-                  <v-row justify="center">
-                    <v-col cols="12" md="8" lg="6">
-                      <v-file-input
-                        v-model="imageFiles"
-                        label="上傳圖片（最多 10 張，每張最大 10MB）"
-                        prepend-icon="mdi-image"
-                        variant="outlined"
-                        density="compact"
-                        multiple
-                        accept="image/jpeg,image/png,image/webp"
-                        :disabled="isLoading"
-                        @change="handleImageSelection"
-                        show-size
-                        hide-details="auto"
-                      ></v-file-input>
-                      
-                      <!-- 圖片預覽區域 -->
-                      <div v-if="selectedImages.length > 0" class="mt-3">
-                        <div class="text-caption text-medium-emphasis mb-2">
-                          已選擇 {{ selectedImages.length }} / 10 張圖片
-                        </div>
-                        <div class="d-flex flex-wrap ga-2">
-                          <v-card
-                            v-for="(image, index) in selectedImages"
-                            :key="index"
-                            class="image-preview-card"
-                            elevation="2"
-                            style="position: relative; width: 120px; height: 120px;"
-                          >
-                            <v-img
-                              :src="image.preview"
-                              cover
-                              style="width: 100%; height: 100%;"
-                            ></v-img>
-                            <v-btn
-                              icon
-                              size="small"
-                              color="error"
-                              variant="flat"
-                              style="position: absolute; top: 4px; right: 4px;"
-                              @click="removeImage(index)"
-                            >
-                              <v-icon size="small">mdi-close</v-icon>
-                            </v-btn>
-                            <div class="text-caption text-center pa-1" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white;">
-                              {{ formatFileSize(image.file.size) }}
-                            </div>
-                          </v-card>
-                        </div>
-                      </div>
-                      
-                      <!-- 錯誤提示 -->
-                      <v-alert
-                        v-if="imageUploadError"
-                        type="error"
-                        variant="tonal"
-                        density="compact"
-                        class="mt-2"
-                        closable
-                        @click:close="imageUploadError = ''"
-                      >
-                        {{ imageUploadError }}
-                      </v-alert>
-                    </v-col>
-                  </v-row>
-                </v-card-text>
-
                 <v-divider></v-divider>
 
                 <!-- 聊天訊息區域 -->
@@ -346,7 +277,74 @@
 
                 <!-- 輸入區域 -->
                 <div class="flex-shrink-0 pa-4">
+                  <!-- 圖片預覽區域（如果有選中的圖片） -->
+                  <div v-if="selectedImages.length > 0 && showImageUpload" class="mb-2">
+                    <div class="text-caption text-medium-emphasis mb-2">
+                      已選擇 {{ selectedImages.length }} / 10 張圖片
+                    </div>
+                    <div class="d-flex flex-wrap ga-2">
+                      <v-card
+                        v-for="(image, index) in selectedImages"
+                        :key="index"
+                        class="image-preview-card"
+                        elevation="2"
+                        style="position: relative; width: 80px; height: 80px;"
+                      >
+                        <v-img
+                          :src="image.preview"
+                          cover
+                          style="width: 100%; height: 100%;"
+                        ></v-img>
+                        <v-btn
+                          icon
+                          size="x-small"
+                          color="error"
+                          variant="flat"
+                          style="position: absolute; top: 2px; right: 2px; min-width: 20px; height: 20px;"
+                          @click="removeImage(index)"
+                        >
+                          <v-icon size="x-small">mdi-close</v-icon>
+                        </v-btn>
+                      </v-card>
+                    </div>
+                    <!-- 錯誤提示 -->
+                    <v-alert
+                      v-if="imageUploadError"
+                      type="error"
+                      variant="tonal"
+                      density="compact"
+                      class="mt-2"
+                      closable
+                      @click:close="imageUploadError = ''"
+                    >
+                      {{ imageUploadError }}
+                    </v-alert>
+                  </div>
+                  
                   <div class="d-flex align-end ga-2">
+                    <!-- 圖片上傳按鈕（僅 GPT-5 時顯示） -->
+                    <v-btn
+                      v-if="showImageUpload"
+                      icon
+                      size="large"
+                      color="primary"
+                      variant="outlined"
+                      :disabled="isLoading || selectedImages.length >= 10"
+                      @click="triggerImageUpload"
+                      title="上傳圖片"
+                    >
+                      <v-icon>mdi-plus</v-icon>
+                    </v-btn>
+                    <!-- 隱藏的 file input -->
+                    <input
+                      ref="fileInputRef"
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp"
+                      style="display: none"
+                      @change="handleImageSelection"
+                    />
+                    
                     <v-textarea
                       v-model="userInput"
                       label="輸入您的問題..."
@@ -615,7 +613,14 @@ const getModelIcon = (value) => {
 }
 
 // 圖片處理相關變數和函數
-const imageFiles = ref(null)
+const fileInputRef = ref(null)
+
+// 觸發圖片上傳
+const triggerImageUpload = () => {
+  if (fileInputRef.value) {
+    fileInputRef.value.click()
+  }
+}
 
 // 圖片處理工具函數
 const formatFileSize = (bytes) => {
@@ -650,17 +655,21 @@ const convertToBase64 = (file) => {
   })
 }
 
-const handleImageSelection = async (files) => {
+const handleImageSelection = async (event) => {
   imageUploadError.value = ''
   
+  const files = event.target.files
   if (!files || files.length === 0) {
-    selectedImages.value = []
     return
   }
 
   // 檢查總數限制
   if (selectedImages.value.length + files.length > 10) {
     imageUploadError.value = '最多只能上傳 10 張圖片'
+    // 重置 input
+    if (fileInputRef.value) {
+      fileInputRef.value.value = ''
+    }
     return
   }
 
@@ -699,6 +708,11 @@ const handleImageSelection = async (files) => {
   }
 
   selectedImages.value = [...selectedImages.value, ...newImages]
+  
+  // 重置 input 以便可以再次選擇相同的文件
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
 }
 
 const removeImage = (index) => {
@@ -718,6 +732,10 @@ watch(selectedModel, () => {
   })
   selectedImages.value = []
   imageUploadError.value = ''
+  // 重置 file input
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
 })
 
 const sendMessage = async () => {
@@ -729,30 +747,26 @@ const sendMessage = async () => {
     mimeType: img.mimeType
   }))
 
+  // 保存圖片預覽（不釋放 URL，因為需要在消息中顯示）
   const userMessage = {
     id: Date.now(),
     role: 'user',
-    content: userInput.value,
+    content: userInput.value || (selectedImages.value.length > 0 ? '看圖片' : ''),
     images: selectedImages.value.length > 0 ? selectedImages.value.map(img => ({
-      preview: img.preview,
+      preview: img.preview, // 保留 preview URL 用於顯示
       mimeType: img.mimeType
     })) : undefined,
     timestamp: new Date()
   }
 
   messages.value.push(userMessage)
-  const question = userInput.value
+  const question = userInput.value || (selectedImages.value.length > 0 ? '看圖片' : '')
   const imagesToSend = imagesData.length > 0 ? imagesData : null
   userInput.value = ''
   
-  // 清除選中的圖片
-  selectedImages.value.forEach(img => {
-    if (img.preview) {
-      URL.revokeObjectURL(img.preview)
-    }
-  })
+  // 清除選中的圖片（但保留 preview URL 給消息顯示）
+  // 注意：不釋放 preview URL，因為消息中還需要使用
   selectedImages.value = []
-  imageFiles.value = null
   
   isLoading.value = true
   error.value = ''
