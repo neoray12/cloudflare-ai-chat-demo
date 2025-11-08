@@ -374,52 +374,59 @@
                     </v-alert>
                   </div>
                   
-                  <div class="d-flex align-end ga-2">
-                    <!-- 圖片上傳按鈕（僅 GPT-5 時顯示） -->
-                    <v-btn
-                      v-if="showImageUpload"
-                      icon
-                      size="large"
-                      color="primary"
-                      variant="outlined"
-                      :disabled="isLoading || selectedImages.length >= 10"
-                      @click="triggerImageUpload"
-                      title="上傳圖片"
-                    >
-                      <v-icon>mdi-plus</v-icon>
-                    </v-btn>
-                    <!-- 隱藏的 file input -->
-                    <input
-                      ref="fileInputRef"
-                      type="file"
-                      multiple
-                      accept="image/jpeg,image/png,image/webp"
-                      style="display: none"
-                      @change="handleImageSelection"
-                    />
-                    
-                    <v-textarea
-                      v-model="userInput"
-                      label="輸入您的問題..."
-                      variant="outlined"
-                      auto-grow
-                      rows="1"
-                      max-rows="5"
-                      color="primary"
-                      :disabled="isLoading"
-                      @keydown.ctrl.enter.prevent="sendMessage"
-                      @keydown.meta.enter.prevent="sendMessage"
-                    ></v-textarea>
-                    <v-btn
-                      :disabled="isLoading || (!userInput.trim() && selectedImages.length === 0)"
-                      :loading="isLoading"
-                      color="primary"
-                      size="large"
-                      icon
-                      @click="sendMessage"
-                    >
-                      <v-icon>mdi-send</v-icon>
-                    </v-btn>
+                  <div class="input-controls" :class="{ 'input-controls--no-upload': !showImageUpload }">
+                    <div class="input-slot">
+                      <v-btn
+                        v-if="showImageUpload"
+                        icon
+                        size="large"
+                        color="primary"
+                        variant="outlined"
+                        :disabled="isLoading || selectedImages.length >= 10"
+                        @click="triggerImageUpload"
+                        title="上傳圖片"
+                      >
+                        <v-icon>mdi-plus</v-icon>
+                      </v-btn>
+                      <!-- 隱藏的 file input -->
+                      <input
+                        ref="fileInputRef"
+                        type="file"
+                        multiple
+                        accept="image/jpeg,image/png,image/webp"
+                        style="display: none"
+                        @change="handleImageSelection"
+                      />
+                    </div>
+
+                    <div class="input-slot input-slot--textarea">
+                      <v-textarea
+                        v-model="userInput"
+                        label="輸入您的問題..."
+                        variant="outlined"
+                        auto-grow
+                        rows="1"
+                        max-rows="5"
+                        color="primary"
+                        class="input-textarea"
+                        :disabled="isLoading"
+                        @keydown.ctrl.enter.prevent="sendMessage"
+                        @keydown.meta.enter.prevent="sendMessage"
+                      ></v-textarea>
+                    </div>
+
+                    <div class="input-slot">
+                      <v-btn
+                        :disabled="isLoading || (!userInput.trim() && selectedImages.length === 0)"
+                        :loading="isLoading"
+                        color="primary"
+                        size="large"
+                        icon
+                        @click="sendMessage"
+                      >
+                        <v-icon>mdi-send</v-icon>
+                      </v-btn>
+                    </div>
                   </div>
                 </div>
               </v-card>
@@ -524,6 +531,63 @@
 
 .model-icon-spacing {
   margin-right: 12px !important;
+}
+
+.input-controls {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) 140px;
+  gap: 16px;
+  align-items: end;
+  justify-content: center;
+}
+
+.input-controls--no-upload {
+  grid-template-columns: minmax(0, 1fr) 140px;
+}
+
+.input-controls--no-upload .input-slot:first-child {
+  display: none;
+}
+
+.input-slot {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.input-slot--textarea {
+  width: 100%;
+}
+
+.input-textarea {
+  width: 100%;
+}
+
+@media (max-width: 960px) {
+  .input-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .input-controls--no-upload {
+    grid-template-columns: 1fr;
+  }
+
+  .input-controls--no-upload .input-slot:first-child {
+    display: none;
+  }
+
+  .input-slot {
+    justify-content: center;
+  }
+
+  .input-slot--textarea {
+    width: 100%;
+  }
+
+  .input-slot:not(.input-slot--textarea) > * {
+    width: auto;
+  }
 }
 </style>
 
@@ -893,17 +957,22 @@ const sendMessage = async () => {
       dataType: typeof err.response?.data
     })
     
-    // 檢查是否為 429 限流錯誤
-    if (err.response?.data?.details && err.response.data.details.includes('Error Code 429')) {
-      error.value = err.response.data.details
+    const details = err.response?.data?.details
+    const securityConfigError = parseSecurityConfigurationError(details)
+    
+    if (details && details.includes('Error Code 429')) {
+      error.value = details
     } 
+    // 檢查是否為 AI 安全設定攔截錯誤
+    else if (securityConfigError) {
+      error.value = formatSecurityErrorMessage(securityConfigError)
+    }
     // 檢查是否為 DLP 政策錯誤 (500 或 424)
     else if ((err.response?.status === 500 || err.response?.status === 424) && 
-             err.response?.data?.details && 
-             err.response.data.details.includes('DLP policy violations')) {
+             details && 
+             details.includes('DLP policy violations')) {
       const rayId = err.response.headers['cf-ray'] || '未知'
       const statusCode = err.response.status
-      const details = err.response.data.details
       
       // 解析 DLP 錯誤詳情
       let dlpReason = '內容違反資料外洩防護政策'
@@ -926,10 +995,8 @@ Ray ID: ${rayId}
     } 
     // 檢查是否為 AI Gateway 一般性攔截（如 Prompt 被安全設定攔截）
     else if ((err.response?.status === 424 || err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 451 || err.response?.status === 500) &&
-             err.response?.data?.details && 
-             err.response.data.details.includes('AI Gateway')) {
-      const details = err.response.data.details
-      // 嘗試從 details 內的 JSON 字串解析出 error 陣列的 code 與 message
+             details && 
+             details.includes('AI Gateway')) {
       let gatewayCode = '未知'
       let gatewayMessage = '請求被 AI Gateway 攔截'
       try {
@@ -945,7 +1012,6 @@ Ray ID: ${rayId}
         }
       } catch (e) {
         console.log('解析 AI Gateway 錯誤詳情失敗，回退為原文:', e)
-        // 回退：若無法解析，就顯示 details 原文
         gatewayMessage = details
       }
       error.value = `你的問題已被 AI Gateway 擋下\n\n代碼: ${gatewayCode}\n訊息: ${gatewayMessage}`
@@ -966,6 +1032,54 @@ const formatTime = (timestamp) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+// 從 details 字串中提取 JSON
+const extractJsonFromDetails = (details) => {
+  if (!details || typeof details !== 'string') {
+    return null
+  }
+
+  const jsonStart = details.indexOf('{')
+  const jsonEnd = details.lastIndexOf('}')
+  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) {
+    return null
+  }
+
+  try {
+    const jsonStr = details.slice(jsonStart, jsonEnd + 1)
+    return JSON.parse(jsonStr)
+  } catch (error) {
+    console.log('解析 details JSON 失敗:', error)
+    return null
+  }
+}
+
+// 解析 AI 安全設定攔截錯誤
+const parseSecurityConfigurationError = (details) => {
+  const parsed = extractJsonFromDetails(details)
+  if (!parsed || !Array.isArray(parsed.error)) {
+    return null
+  }
+
+  const securityError = parsed.error.find(item =>
+    typeof item?.message === 'string' &&
+    item.message.toLowerCase().includes('prompt blocked')
+  )
+
+  if (!securityError) {
+    return null
+  }
+
+  return {
+    code: securityError.code ?? '未知',
+    message: securityError.message ?? '請求被安全設定攔截'
+  }
+}
+
+// 格式化 AI 安全設定錯誤訊息
+const formatSecurityErrorMessage = ({ code, message }) => {
+  return `你的問題已被 AI 安全設定攔截\n\n代碼: ${code}\n訊息: ${message}\n\n請調整輸入內容，或聯繫管理員確認安全設定。`
 }
 
 // 解析 Cloudflare Firewall 錯誤
@@ -1156,17 +1270,23 @@ const regenerateMessage = async (message) => {
   } catch (err) {
     console.error('重新生成錯誤:', err)
     
+    const details = err.response?.data?.details
+    const securityConfigError = parseSecurityConfigurationError(details)
+    
     // 檢查是否為 429 限流錯誤
-    if (err.response?.data?.details && err.response.data.details.includes('Error Code 429')) {
-      error.value = err.response.data.details
+    if (details && details.includes('Error Code 429')) {
+      error.value = details
     } 
+    // 檢查是否為 AI 安全設定攔截錯誤
+    else if (securityConfigError) {
+      error.value = formatSecurityErrorMessage(securityConfigError)
+    }
     // 檢查是否為 DLP 政策錯誤 (500 或 424)
     else if ((err.response?.status === 500 || err.response?.status === 424) && 
-             err.response?.data?.details && 
-             err.response.data.details.includes('DLP policy violations')) {
+             details && 
+             details.includes('DLP policy violations')) {
       const rayId = err.response.headers['cf-ray'] || '未知'
       const statusCode = err.response.status
-      const details = err.response.data.details
       
       // 解析 DLP 錯誤詳情
       let dlpReason = '內容違反資料外洩防護政策'
@@ -1189,9 +1309,8 @@ Ray ID: ${rayId}
     } 
     // 檢查是否為 AI Gateway 一般性攔截（如 Prompt 被安全設定攔截）
     else if ((err.response?.status === 424 || err.response?.status === 400 || err.response?.status === 403 || err.response?.status === 451 || err.response?.status === 500) &&
-             err.response?.data?.details && 
-             err.response.data.details.includes('AI Gateway')) {
-      const details = err.response.data.details
+             details && 
+             details.includes('AI Gateway')) {
       let gatewayCode = '未知'
       let gatewayMessage = '請求被 AI Gateway 攔截'
       try {
@@ -1376,6 +1495,63 @@ onMounted(() => {
 
 .welcome-message {
   text-align: center;
+}
+
+.input-controls {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) 140px;
+  gap: 16px;
+  align-items: end;
+  justify-content: center;
+}
+
+.input-controls--no-upload {
+  grid-template-columns: minmax(0, 1fr) 140px;
+}
+
+.input-controls--no-upload .input-slot:first-child {
+  display: none;
+}
+
+.input-slot {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.input-slot--textarea {
+  width: 100%;
+}
+
+.input-textarea {
+  width: 100%;
+}
+
+@media (max-width: 960px) {
+  .input-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .input-controls--no-upload {
+    grid-template-columns: 1fr;
+  }
+
+  .input-controls--no-upload .input-slot:first-child {
+    display: none;
+  }
+
+  .input-slot {
+    justify-content: center;
+  }
+
+  .input-slot--textarea {
+    width: 100%;
+  }
+
+  .input-slot:not(.input-slot--textarea) > * {
+    width: auto;
+  }
 }
 </style>
 
